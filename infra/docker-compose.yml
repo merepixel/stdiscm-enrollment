@@ -1,0 +1,111 @@
+networks:
+  backend_net:
+    driver: bridge
+
+volumes:
+  pgdata:
+
+services:
+  traefik:
+    image: traefik:2.11
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+    ports:
+      - "80:80"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - backend_net
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: enrollment
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - backend_net
+
+  gateway:
+    build: ../gateway
+    depends_on:
+      - db
+      - auth-service
+      - course-service
+      - enrollment-service
+      - grade-service
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/enrollment
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.gateway.rule=PathPrefix(`/api`)
+      - traefik.http.routers.gateway.entrypoints=web
+      - traefik.http.services.gateway.loadbalancer.server.port=8000
+    networks:
+      - backend_net
+    expose:
+      - "8000"
+    ports:
+      - "8000:8000"
+
+  auth-service:
+    build: ../auth-service
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/enrollment
+    networks:
+      - backend_net
+    expose:
+      - "8001"
+
+  course-service:
+    build: ../course-service
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/enrollment
+    networks:
+      - backend_net
+    expose:
+      - "8002"
+
+  enrollment-service:
+    build: ../enrollment-service
+    depends_on:
+      - db
+      - auth-service
+      - course-service
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/enrollment
+    networks:
+      - backend_net
+    expose:
+      - "8003"
+
+  grade-service:
+    build: ../grade-service
+    depends_on:
+      - db
+      - auth-service
+      - course-service
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/enrollment
+    networks:
+      - backend_net
+    expose:
+      - "8004"
+
+  frontend:
+    build: ../frontend
+    environment:
+      VITE_API_BASE: http://localhost/api
+    ports:
+      - "3000:3000"
+    networks:
+      - backend_net
