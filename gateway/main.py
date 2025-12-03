@@ -38,6 +38,8 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@db:5432
 JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret")
 JWT_ALG = os.getenv("JWT_ALG", "HS256")
 AUTH_HTTP_TARGET = os.getenv("AUTH_HTTP_TARGET", "http://auth-service:8001")
+CURRENT_TERM = os.getenv("CURRENT_TERM", "").strip()
+CURRENT_ACADEMIC_YEAR = os.getenv("CURRENT_ACADEMIC_YEAR", "").strip()
 
 AUTH_GRPC_TARGET = os.getenv("AUTH_GRPC_TARGET", "auth-service:50051")
 COURSE_GRPC_TARGET = os.getenv("COURSE_GRPC_TARGET", "course-service:50052")
@@ -231,6 +233,44 @@ def list_courses():
     try:
         resp = course_stub.ListCourses(course_pb2.ListCoursesRequest())
         counts = enrollment_counts_by_course()
+        courses = []
+        for c in resp.courses:
+            term = getattr(c, "term", "")
+            ay = getattr(c, "academic_year", "")
+            if CURRENT_TERM and term != CURRENT_TERM:
+                continue
+            if CURRENT_ACADEMIC_YEAR and ay != CURRENT_ACADEMIC_YEAR:
+                continue
+            courses.append(
+                {
+                    "id": c.id,
+                    "code": c.code,
+                    "title": c.title,
+                    "description": c.description,
+                    "capacity": c.capacity,
+                    "term": term,
+                    "academic_year": ay,
+                    "section": getattr(c, "section", ""),
+                    "assigned_faculty_id": getattr(c, "assigned_faculty_id", ""),
+                    "enrolled": counts.get(c.id, 0),
+                    "available": max(c.capacity - counts.get(c.id, 0), 0),
+                }
+            )
+        return {"courses": courses}
+    except grpc.RpcError as exc:
+        grpc_unavailable("course", exc)
+
+
+@course_router.get("/assigned")
+def list_my_courses(user=Depends(require_user)):
+    """Return courses assigned to the authenticated faculty member."""
+    if user.get("role") != "FACULTY":
+        raise HTTPException(status_code=403, detail="FACULTY role required")
+    try:
+        resp = course_stub.ListFacultyCourses(
+            course_pb2.ListFacultyCoursesRequest(faculty_id=user["user_id"])
+        )
+        counts = enrollment_counts_by_course()
         courses = [
             {
                 "id": c.id,
@@ -238,6 +278,10 @@ def list_courses():
                 "title": c.title,
                 "description": c.description,
                 "capacity": c.capacity,
+                "term": getattr(c, "term", ""),
+                "academic_year": getattr(c, "academic_year", ""),
+                "section": getattr(c, "section", ""),
+                "assigned_faculty_id": getattr(c, "assigned_faculty_id", ""),
                 "enrolled": counts.get(c.id, 0),
                 "available": max(c.capacity - counts.get(c.id, 0), 0),
             }
@@ -261,6 +305,10 @@ def get_course(course_id: str):
             "title": c.title,
             "description": c.description,
             "capacity": c.capacity,
+            "term": getattr(c, "term", ""),
+            "academic_year": getattr(c, "academic_year", ""),
+            "section": getattr(c, "section", ""),
+            "assigned_faculty_id": getattr(c, "assigned_faculty_id", ""),
             "enrolled": enrolled,
             "available": max(c.capacity - enrolled, 0),
         }
@@ -302,16 +350,60 @@ def list_my_enrollments(user=Depends(require_user)):
         resp = enrollment_stub.ListStudentEnrollments(
             enrollment_pb2.ListStudentEnrollmentsRequest(student_id=user["user_id"])
         )
-        enrollments = [
-            {
-                "id": e.id,
-                "student_id": e.student_id,
-                "course_id": e.course_id,
-                "status": e.status,
-            }
-            for e in resp.enrollments
-        ]
+        enrollments = []
+        for e in resp.enrollments:
+            term = getattr(e, "term", "")
+            ay = getattr(e, "academic_year", "")
+            if CURRENT_TERM and term != CURRENT_TERM:
+                continue
+            if CURRENT_ACADEMIC_YEAR and ay != CURRENT_ACADEMIC_YEAR:
+                continue
+            enrollments.append(
+                {
+                    "id": e.id,
+                    "student_id": e.student_id,
+                    "course_id": e.course_id,
+                    "status": e.status,
+                    "term": term,
+                    "academic_year": ay,
+                }
+            )
         return {"enrollments": enrollments}
+    except grpc.RpcError as exc:
+        grpc_unavailable("enrollment", exc)
+
+
+@enrollment_router.get("/course/{course_id}/roster")
+def course_roster(course_id: str, user=Depends(require_user)):
+    """Return enrolled students (UUID + number + name) for a course; faculty only."""
+    if user.get("role") != "FACULTY":
+        raise HTTPException(status_code=403, detail="FACULTY role required")
+    try:
+        roster_resp = enrollment_stub.ListCourseRoster(enrollment_pb2.ListCourseRosterRequest(course_id=course_id))
+
+        # Fetch course metadata to derive term/academic_year for grade lookup
+        course_resp = course_stub.GetCourse(course_pb2.GetCourseRequest(id=course_id))
+        course = course_resp.course
+        term = getattr(course, "term", "")
+        academic_year = getattr(course, "academic_year", "")
+
+        # Fetch existing grades for this course/term/AY
+        grades_resp = grade_stub.ListCourseGrades(
+            grade_pb2.ListCourseGradesRequest(course_id=course_id, term=term, academic_year=academic_year)
+        )
+        grade_map = {g.student_id: g.grade for g in grades_resp.grades}
+
+        roster = [
+            {
+                "student_id": r.student_id,
+                "student_name": r.student_name,
+                "user_number": r.user_number,
+                "status": r.status,
+                "grade": grade_map.get(r.student_id),
+            }
+            for r in roster_resp.roster
+        ]
+        return {"roster": roster, "term": term, "academic_year": academic_year}
     except grpc.RpcError as exc:
         grpc_unavailable("enrollment", exc)
 
@@ -323,24 +415,31 @@ grade_router = APIRouter(prefix="/api/grades", tags=["grades"])
 @grade_router.get("/my")
 def list_my_grades(user=Depends(require_user)):
     try:
-        resp = grade_stub.ListGrades(grade_pb2.ListGradesRequest(student_id=user["user_id"]))
-        grades = [
+        resp = grade_stub.ListStudentTermGrades(grade_pb2.ListStudentTermGradesRequest(student_id=user["user_id"]))
+        groups = [
             {
-                "id": g.id,
-                "student_id": g.student_id,
-                "course_id": g.course_id,
-                "term": g.term,
-                "grade": g.grade,
+                "academic_year": grp.academic_year,
+                "term": grp.term,
+                "courses": [
+                    {
+                        "course_id": c.course_id,
+                        "course_code": c.course_code,
+                        "course_name": c.course_name,
+                        "grade": c.grade or None,
+                    }
+                    for c in grp.courses
+                ],
             }
-            for g in resp.grades
+            for grp in resp.groups
         ]
-        return {"grades": grades}
+        return {"groups": groups}
     except grpc.RpcError as exc:
         grpc_unavailable("grade", exc)
 
 
 @grade_router.post("/")
 def submit_grade(body: dict, user=Depends(require_user)):
+    """Single-grade submission (legacy); expects UUIDs and academic year."""
     if user.get("role") != "FACULTY":
         raise HTTPException(status_code=403, detail="FACULTY role required")
     try:
@@ -349,6 +448,7 @@ def submit_grade(body: dict, user=Depends(require_user)):
                 student_id=body.get("student_id", ""),
                 course_id=body.get("course_id", ""),
                 term=body.get("term", ""),
+                academic_year=body.get("academic_year", ""),
                 grade=body.get("grade", ""),
             )
         )
@@ -359,9 +459,47 @@ def submit_grade(body: dict, user=Depends(require_user)):
                 "student_id": g.student_id,
                 "course_id": g.course_id,
                 "term": g.term,
+                "academic_year": getattr(g, "academic_year", ""),
                 "grade": g.grade,
             }
         }
+    except grpc.RpcError as exc:
+        grpc_unavailable("grade", exc)
+
+
+@grade_router.post("/bulk")
+def submit_grades(body: dict, user=Depends(require_user)):
+    """Bulk upsert of grades for a course/term/academic year using UUIDs."""
+    if user.get("role") != "FACULTY":
+        raise HTTPException(status_code=403, detail="FACULTY role required")
+    course_id = body.get("course_id", "")
+    term = body.get("term", "")
+    academic_year = body.get("academic_year", "")
+    records = body.get("records", [])
+    try:
+        resp = grade_stub.SubmitGrades(
+            grade_pb2.SubmitGradesRequest(
+                course_id=course_id,
+                term=term,
+                academic_year=academic_year,
+                records=[
+                    grade_pb2.StudentGradeInput(student_id=rec.get("student_id", ""), grade=rec.get("grade", ""))
+                    for rec in records
+                ],
+            )
+        )
+        grades = [
+            {
+                "id": g.id,
+                "student_id": g.student_id,
+                "course_id": g.course_id,
+                "term": g.term,
+                "academic_year": getattr(g, "academic_year", ""),
+                "grade": g.grade,
+            }
+            for g in resp.records
+        ]
+        return {"grades": grades}
     except grpc.RpcError as exc:
         grpc_unavailable("grade", exc)
 

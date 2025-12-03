@@ -11,12 +11,20 @@ message Course {
   string title = 3;
   string description = 4;
   int32 capacity = 5;
+  string term = 6;
+  string academic_year = 7;
+  string section = 8;
+  string assigned_faculty_id = 9;
 }
 
 message ListCoursesRequest {}
 
 message ListCoursesResponse {
   repeated Course courses = 1;
+}
+
+message ListFacultyCoursesRequest {
+  string faculty_id = 1;
 }
 
 message GetCourseRequest {
@@ -32,5 +40,6 @@ message GetCourseResponse {
 
 service CourseService {
   rpc ListCourses (ListCoursesRequest) returns (ListCoursesResponse);
+  rpc ListFacultyCourses (ListFacultyCoursesRequest) returns (ListCoursesResponse);
   rpc GetCourse (GetCourseRequest) returns (GetCourseResponse);
 }

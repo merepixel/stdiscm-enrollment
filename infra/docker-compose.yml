@@ -54,6 +54,9 @@ services:
       ENROLLMENT_GRPC_TARGET: enrollment-service:50053
       GRADE_GRPC_TARGET: grade-service:50054
       CORS_ALLOW_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      CURRENT_TERM: "2"          
+      CURRENT_ACADEMIC_YEAR: "2025-2026"
+
     labels:
       - traefik.enable=true
       - traefik.http.routers.gateway.rule=PathPrefix(`/api`)

@@ -10,18 +10,36 @@ message GradeRecord {
   string student_id = 2;
   string course_id = 3;
   string term = 4;
-  string grade = 5;
+  string academic_year = 5;
+  string grade = 6;
 }
 
 message SubmitGradeRequest {
   string student_id = 1;
   string course_id = 2;
   string term = 3;
-  string grade = 4;
+  string academic_year = 4;
+  string grade = 5;
 }
 
 message SubmitGradeResponse {
   GradeRecord record = 1;
+}
+
+message StudentGradeInput {
+  string student_id = 1;
+  string grade = 2;
+}
+
+message SubmitGradesRequest {
+  string course_id = 1;
+  string term = 2;
+  string academic_year = 3;
+  repeated StudentGradeInput records = 4;
+}
+
+message SubmitGradesResponse {
+  repeated GradeRecord records = 1;
 }
 
 message ListGradesRequest {
@@ -32,7 +50,41 @@ message ListGradesResponse {
   repeated GradeRecord grades = 1;
 }
 
+message ListCourseGradesRequest {
+  string course_id = 1;
+  string term = 2;
+  string academic_year = 3;
+}
+
+message ListCourseGradesResponse {
+  repeated GradeRecord grades = 1;
+}
+
+message TermCourseGrade {
+  string course_id = 1;
+  string course_code = 2;
+  string course_name = 3;
+  string grade = 4;
+}
+
+message TermGradesGroup {
+  string academic_year = 1;
+  string term = 2;
+  repeated TermCourseGrade courses = 3;
+}
+
+message ListStudentTermGradesRequest {
+  string student_id = 1;
+}
+
+message ListStudentTermGradesResponse {
+  repeated TermGradesGroup groups = 1;
+}
+
 service GradeService {
   rpc SubmitGrade (SubmitGradeRequest) returns (SubmitGradeResponse);
+  rpc SubmitGrades (SubmitGradesRequest) returns (SubmitGradesResponse);
   rpc ListGrades (ListGradesRequest) returns (ListGradesResponse);
+  rpc ListCourseGrades (ListCourseGradesRequest) returns (ListCourseGradesResponse);
+  rpc ListStudentTermGrades (ListStudentTermGradesRequest) returns (ListStudentTermGradesResponse);
 }

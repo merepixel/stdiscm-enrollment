@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10\x65nrollment.proto\x12\nenrollment\"m\n\nEnrollment\x12\n\n\x02id\x18\x01 \x01(\t\x12\x12\n\nstudent_id\x18\x02 \x01(\t\x12\x11\n\tcourse_id\x18\x03 \x01(\t\x12,\n\x06status\x18\x04 \x01(\x0e\x32\x1c.enrollment.EnrollmentStatus\"6\n\rEnrollRequest\x12\x12\n\nstudent_id\x18\x01 \x01(\t\x12\x11\n\tcourse_id\x18\x02 \x01(\t\"<\n\x0e\x45nrollResponse\x12*\n\nenrollment\x18\x01 \x01(\x0b\x32\x16.enrollment.Enrollment\"3\n\x1dListStudentEnrollmentsRequest\x12\x12\n\nstudent_id\x18\x01 \x01(\t\"M\n\x1eListStudentEnrollmentsResponse\x12+\n\x0b\x65nrollments\x18\x01 \x03(\x0b\x32\x16.enrollment.Enrollment\".\n\x15\x44ropEnrollmentRequest\x12\x15\n\renrollment_id\x18\x01 \x01(\t\"D\n\x16\x44ropEnrollmentResponse\x12*\n\nenrollment\x18\x01 \x01(\x0b\x32\x16.enrollment.Enrollment*`\n\x10\x45nrollmentStatus\x12!\n\x1d\x45NROLLMENT_STATUS_UNSPECIFIED\x10\x00\x12\x0c\n\x08\x45NROLLED\x10\x01\x12\x0e\n\nWAITLISTED\x10\x02\x12\x0b\n\x07\x44ROPPED\x10\x03\x32\x9e\x02\n\x11\x45nrollmentService\x12?\n\x06\x45nroll\x12\x19.enrollment.EnrollRequest\x1a\x1a.enrollment.EnrollResponse\x12o\n\x16ListStudentEnrollments\x12).enrollment.ListStudentEnrollmentsRequest\x1a*.enrollment.ListStudentEnrollmentsResponse\x12W\n\x0e\x44ropEnrollment\x12!.enrollment.DropEnrollmentRequest\x1a\".enrollment.DropEnrollmentResponseB\x1a\n\x16\x63om.stdiscm.enrollmentP\x01\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10\x65nrollment.proto\x12\nenrollment\"\x92\x01\n\nEnrollment\x12\n\n\x02id\x18\x01 \x01(\t\x12\x12\n\nstudent_id\x18\x02 \x01(\t\x12\x11\n\tcourse_id\x18\x03 \x01(\t\x12,\n\x06status\x18\x04 \x01(\x0e\x32\x1c.enrollment.EnrollmentStatus\x12\x0c\n\x04term\x18\x05 \x01(\t\x12\x15\n\racademic_year\x18\x06 \x01(\t\"6\n\rEnrollRequest\x12\x12\n\nstudent_id\x18\x01 \x01(\t\x12\x11\n\tcourse_id\x18\x02 \x01(\t\"<\n\x0e\x45nrollResponse\x12*\n\nenrollment\x18\x01 \x01(\x0b\x32\x16.enrollment.Enrollment\",\n\x17ListCourseRosterRequest\x12\x11\n\tcourse_id\x18\x01 \x01(\t\"z\n\x0bRosterEntry\x12\x12\n\nstudent_id\x18\x01 \x01(\t\x12\x14\n\x0cstudent_name\x18\x02 \x01(\t\x12\x13\n\x0buser_number\x18\x03 \x01(\t\x12,\n\x06status\x18\x04 \x01(\x0e\x32\x1c.enrollment.EnrollmentStatus\"C\n\x18ListCourseRosterResponse\x12\'\n\x06roster\x18\x01 \x03(\x0b\x32\x17.enrollment.RosterEntry\"3\n\x1dListStudentEnrollmentsRequest\x12\x12\n\nstudent_id\x18\x01 \x01(\t\"M\n\x1eListStudentEnrollmentsResponse\x12+\n\x0b\x65nrollments\x18\x01 \x03(\x0b\x32\x16.enrollment.Enrollment\".\n\x15\x44ropEnrollmentRequest\x12\x15\n\renrollment_id\x18\x01 \x01(\t\"D\n\x16\x44ropEnrollmentResponse\x12*\n\nenrollment\x18\x01 \x01(\x0b\x32\x16.enrollment.Enrollment*`\n\x10\x45nrollmentStatus\x12!\n\x1d\x45NROLLMENT_STATUS_UNSPECIFIED\x10\x00\x12\x0c\n\x08\x45NROLLED\x10\x01\x12\x0e\n\nWAITLISTED\x10\x02\x12\x0b\n\x07\x44ROPPED\x10\x03\x32\xfd\x02\n\x11\x45nrollmentService\x12?\n\x06\x45nroll\x12\x19.enrollment.EnrollRequest\x1a\x1a.enrollment.EnrollResponse\x12o\n\x16ListStudentEnrollments\x12).enrollment.ListStudentEnrollmentsRequest\x1a*.enrollment.ListStudentEnrollmentsResponse\x12]\n\x10ListCourseRoster\x12#.enrollment.ListCourseRosterRequest\x1a$.enrollment.ListCourseRosterResponse\x12W\n\x0e\x44ropEnrollment\x12!.enrollment.DropEnrollmentRequest\x1a\".enrollment.DropEnrollmentResponseB\x1a\n\x16\x63om.stdiscm.enrollmentP\x01\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,22 +32,28 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'enrollment_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\026com.stdiscm.enrollmentP\001'
-  _globals['_ENROLLMENTSTATUS']._serialized_start=511
-  _globals['_ENROLLMENTSTATUS']._serialized_end=607
-  _globals['_ENROLLMENT']._serialized_start=32
-  _globals['_ENROLLMENT']._serialized_end=141
-  _globals['_ENROLLREQUEST']._serialized_start=143
-  _globals['_ENROLLREQUEST']._serialized_end=197
-  _globals['_ENROLLRESPONSE']._serialized_start=199
-  _globals['_ENROLLRESPONSE']._serialized_end=259
-  _globals['_LISTSTUDENTENROLLMENTSREQUEST']._serialized_start=261
-  _globals['_LISTSTUDENTENROLLMENTSREQUEST']._serialized_end=312
-  _globals['_LISTSTUDENTENROLLMENTSRESPONSE']._serialized_start=314
-  _globals['_LISTSTUDENTENROLLMENTSRESPONSE']._serialized_end=391
-  _globals['_DROPENROLLMENTREQUEST']._serialized_start=393
-  _globals['_DROPENROLLMENTREQUEST']._serialized_end=439
-  _globals['_DROPENROLLMENTRESPONSE']._serialized_start=441
-  _globals['_DROPENROLLMENTRESPONSE']._serialized_end=509
-  _globals['_ENROLLMENTSERVICE']._serialized_start=610
-  _globals['_ENROLLMENTSERVICE']._serialized_end=896
+  _globals['_ENROLLMENTSTATUS']._serialized_start=788
+  _globals['_ENROLLMENTSTATUS']._serialized_end=884
+  _globals['_ENROLLMENT']._serialized_start=33
+  _globals['_ENROLLMENT']._serialized_end=179
+  _globals['_ENROLLREQUEST']._serialized_start=181
+  _globals['_ENROLLREQUEST']._serialized_end=235
+  _globals['_ENROLLRESPONSE']._serialized_start=237
+  _globals['_ENROLLRESPONSE']._serialized_end=297
+  _globals['_LISTCOURSEROSTERREQUEST']._serialized_start=299
+  _globals['_LISTCOURSEROSTERREQUEST']._serialized_end=343
+  _globals['_ROSTERENTRY']._serialized_start=345
+  _globals['_ROSTERENTRY']._serialized_end=467
+  _globals['_LISTCOURSEROSTERRESPONSE']._serialized_start=469
+  _globals['_LISTCOURSEROSTERRESPONSE']._serialized_end=536
+  _globals['_LISTSTUDENTENROLLMENTSREQUEST']._serialized_start=538
+  _globals['_LISTSTUDENTENROLLMENTSREQUEST']._serialized_end=589
+  _globals['_LISTSTUDENTENROLLMENTSRESPONSE']._serialized_start=591
+  _globals['_LISTSTUDENTENROLLMENTSRESPONSE']._serialized_end=668
+  _globals['_DROPENROLLMENTREQUEST']._serialized_start=670
+  _globals['_DROPENROLLMENTREQUEST']._serialized_end=716
+  _globals['_DROPENROLLMENTRESPONSE']._serialized_start=718
+  _globals['_DROPENROLLMENTRESPONSE']._serialized_end=786
+  _globals['_ENROLLMENTSERVICE']._serialized_start=887
+  _globals['_ENROLLMENTSERVICE']._serialized_end=1268
 # @@protoc_insertion_point(module_scope)

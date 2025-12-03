@@ -17,6 +17,8 @@ message Enrollment {
   string student_id = 2;
   string course_id = 3;
   EnrollmentStatus status = 4;
+  string term = 5;
+  string academic_year = 6;
 }
 
 message EnrollRequest {
@@ -26,6 +28,21 @@ message EnrollRequest {
 
 message EnrollResponse {
   Enrollment enrollment = 1;
+}
+
+message ListCourseRosterRequest {
+  string course_id = 1;
+}
+
+message RosterEntry {
+  string student_id = 1;
+  string student_name = 2;
+  string user_number = 3;
+  EnrollmentStatus status = 4;
+}
+
+message ListCourseRosterResponse {
+  repeated RosterEntry roster = 1;
 }
 
 message ListStudentEnrollmentsRequest {
@@ -47,5 +64,6 @@ message DropEnrollmentResponse {
 service EnrollmentService {
   rpc Enroll (EnrollRequest) returns (EnrollResponse);
   rpc ListStudentEnrollments (ListStudentEnrollmentsRequest) returns (ListStudentEnrollmentsResponse);
+  rpc ListCourseRoster (ListCourseRosterRequest) returns (ListCourseRosterResponse);
   rpc DropEnrollment (DropEnrollmentRequest) returns (DropEnrollmentResponse);
 }

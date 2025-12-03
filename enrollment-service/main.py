@@ -62,7 +62,19 @@ class Course(Base):
     __table_args__ = {"schema": "course_catalog"}
 
     id = Column(UUID(as_uuid=True), primary_key=True)
+    code = Column(String, nullable=False)
     capacity = Column(Integer, nullable=False)
+    term = Column(String)
+    academic_year = Column(String)
+
+
+class User(Base):
+    __tablename__ = "users"
+    __table_args__ = {"schema": "auth"}
+
+    id = Column(UUID(as_uuid=True), primary_key=True)
+    name = Column(String, nullable=False)
+    user_number = Column(String(32))
 
 
 app = FastAPI(title="Enrollment Service", version="0.1.0")
@@ -135,6 +147,20 @@ def enroll(body: EnrollRequestBody, db: Session = Depends(get_db)):
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
 
+    # Prevent enrolling in multiple sections of the same course code.
+    existing_same_course = (
+        db.query(Enrollment)
+        .join(Course, Course.id == Enrollment.course_id)
+        .filter(
+            Enrollment.student_id == body.student_id,
+            Course.code == course.code,
+            Enrollment.status != EnrollmentStatus.DROPPED.value,
+        )
+        .first()
+    )
+    if existing_same_course:
+        raise HTTPException(status_code=409, detail="Already enrolled in another section of this course")
+
     current = (
         db.query(func.count())
         .select_from(Enrollment)
@@ -161,15 +187,42 @@ def enroll(body: EnrollRequestBody, db: Session = Depends(get_db)):
 
 @app.get("/enrollments")
 def list_enrollments(student_id: str, db: Session = Depends(get_db)):
-    rows = db.query(Enrollment).filter(Enrollment.student_id == student_id).all()
+    rows = (
+        db.query(Enrollment, Course)
+        .join(Course, Course.id == Enrollment.course_id)
+        .filter(Enrollment.student_id == student_id)
+        .all()
+    )
     return [
         {
-            "id": str(e.id),
-            "student_id": str(e.student_id),
-            "course_id": str(e.course_id),
-            "status": e.status,
+            "id": str(enr.id),
+            "student_id": str(enr.student_id),
+            "course_id": str(enr.course_id),
+            "status": enr.status,
+            "term": course.term,
+            "academic_year": course.academic_year,
         }
-        for e in rows
+        for enr, course in rows
+    ]
+
+
+@app.get("/enrollments/roster")
+def course_roster(course_id: str, db: Session = Depends(get_db)):
+    """Roster for a course_id (ENROLLED only) including student name and number."""
+    rows = (
+        db.query(Enrollment, User)
+        .join(User, User.id == Enrollment.student_id)
+        .filter(Enrollment.course_id == course_id, Enrollment.status == EnrollmentStatus.ENROLLED.value)
+        .all()
+    )
+    return [
+        {
+            "student_id": str(enr.student_id),
+            "student_name": usr.name,
+            "user_number": usr.user_number,
+            "status": enr.status,
+        }
+        for enr, usr in rows
     ]
 
 
@@ -204,6 +257,22 @@ class EnrollmentService(enrollment_pb2_grpc.EnrollmentServiceServicer):
                 EnrollmentStatus.ENROLLED.value if current < course.capacity else EnrollmentStatus.WAITLISTED.value
             )
 
+            # Prevent enrolling in multiple sections of the same course code.
+            existing_same_course = (
+                db.query(Enrollment)
+                .join(Course, Course.id == Enrollment.course_id)
+                .filter(
+                    Enrollment.student_id == request.student_id,
+                    Course.code == course.code,
+                    Enrollment.status != EnrollmentStatus.DROPPED.value,
+                )
+                .first()
+            )
+            if existing_same_course:
+                context.set_code(grpc.StatusCode.ALREADY_EXISTS)
+                context.set_details("Already enrolled in another section of this course")
+                return enrollment_pb2.EnrollResponse()
+
             enr = Enrollment(student_id=request.student_id, course_id=request.course_id, status=status)
             db.add(enr)
             db.commit()
@@ -215,6 +284,8 @@ class EnrollmentService(enrollment_pb2_grpc.EnrollmentServiceServicer):
                     student_id=str(enr.student_id),
                     course_id=str(enr.course_id),
                     status=proto_status,
+                    term=course.term or "",
+                    academic_year=course.academic_year or "",
                 )
             )
         except IntegrityError:
@@ -228,37 +299,74 @@ class EnrollmentService(enrollment_pb2_grpc.EnrollmentServiceServicer):
     def ListStudentEnrollments(self, request, context):
         db = SessionLocal()
         try:
-            rows = db.query(Enrollment).filter(Enrollment.student_id == request.student_id).all()
+            rows = (
+                db.query(Enrollment, Course)
+                .join(Course, Course.id == Enrollment.course_id)
+                .filter(Enrollment.student_id == request.student_id)
+                .all()
+            )
             items = [
                 enrollment_pb2.Enrollment(
-                    id=str(e.id),
-                    student_id=str(e.student_id),
-                    course_id=str(e.course_id),
-                    status=self._status_to_proto(e.status),
+                    id=str(enr.id),
+                    student_id=str(enr.student_id),
+                    course_id=str(enr.course_id),
+                    status=self._status_to_proto(enr.status),
+                    term=course.term or "",
+                    academic_year=course.academic_year or "",
                 )
-                for e in rows
+                for enr, course in rows
             ]
             return enrollment_pb2.ListStudentEnrollmentsResponse(enrollments=items)
+        finally:
+            db.close()
+
+    def ListCourseRoster(self, request, context):
+        db = SessionLocal()
+        try:
+            rows = (
+                db.query(Enrollment, User)
+                .join(User, User.id == Enrollment.student_id)
+                .filter(Enrollment.course_id == request.course_id, Enrollment.status == EnrollmentStatus.ENROLLED.value)
+                .all()
+            )
+            roster_items = [
+                enrollment_pb2.RosterEntry(
+                    student_id=str(enr.student_id),
+                    student_name=usr.name or "",
+                    user_number=usr.user_number or "",
+                    status=self._status_to_proto(enr.status),
+                )
+                for enr, usr in rows
+            ]
+            return enrollment_pb2.ListCourseRosterResponse(roster=roster_items)
         finally:
             db.close()
 
     def DropEnrollment(self, request, context):
         db = SessionLocal()
         try:
-            enr = db.query(Enrollment).filter(Enrollment.id == request.enrollment_id).first()
+            enr = (
+                db.query(Enrollment, Course)
+                .join(Course, Course.id == Enrollment.course_id)
+                .filter(Enrollment.id == request.enrollment_id)
+                .first()
+            )
             if not enr:
                 context.set_code(grpc.StatusCode.NOT_FOUND)
                 context.set_details("Enrollment not found")
                 return enrollment_pb2.DropEnrollmentResponse()
-            enr.status = EnrollmentStatus.DROPPED.value
+            enrollment_row, course = enr
+            enrollment_row.status = EnrollmentStatus.DROPPED.value
             db.commit()
-            db.refresh(enr)
+            db.refresh(enrollment_row)
             return enrollment_pb2.DropEnrollmentResponse(
                 enrollment=enrollment_pb2.Enrollment(
-                    id=str(enr.id),
-                    student_id=str(enr.student_id),
-                    course_id=str(enr.course_id),
+                    id=str(enrollment_row.id),
+                    student_id=str(enrollment_row.student_id),
+                    course_id=str(enrollment_row.course_id),
                     status=enrollment_pb2.DROPPED,
+                    term=course.term or "",
+                    academic_year=course.academic_year or "",
                 )
             )
         finally:

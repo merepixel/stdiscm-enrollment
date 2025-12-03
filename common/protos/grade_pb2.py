@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0bgrade.proto\x12\x05grade\"]\n\x0bGradeRecord\x12\n\n\x02id\x18\x01 \x01(\t\x12\x12\n\nstudent_id\x18\x02 \x01(\t\x12\x11\n\tcourse_id\x18\x03 \x01(\t\x12\x0c\n\x04term\x18\x04 \x01(\t\x12\r\n\x05grade\x18\x05 \x01(\t\"X\n\x12SubmitGradeRequest\x12\x12\n\nstudent_id\x18\x01 \x01(\t\x12\x11\n\tcourse_id\x18\x02 \x01(\t\x12\x0c\n\x04term\x18\x03 \x01(\t\x12\r\n\x05grade\x18\x04 \x01(\t\"9\n\x13SubmitGradeResponse\x12\"\n\x06record\x18\x01 \x01(\x0b\x32\x12.grade.GradeRecord\"\'\n\x11ListGradesRequest\x12\x12\n\nstudent_id\x18\x01 \x01(\t\"8\n\x12ListGradesResponse\x12\"\n\x06grades\x18\x01 \x03(\x0b\x32\x12.grade.GradeRecord2\x97\x01\n\x0cGradeService\x12\x44\n\x0bSubmitGrade\x12\x19.grade.SubmitGradeRequest\x1a\x1a.grade.SubmitGradeResponse\x12\x41\n\nListGrades\x12\x18.grade.ListGradesRequest\x1a\x19.grade.ListGradesResponseB\x15\n\x11\x63om.stdiscm.gradeP\x01\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0bgrade.proto\x12\x05grade\"t\n\x0bGradeRecord\x12\n\n\x02id\x18\x01 \x01(\t\x12\x12\n\nstudent_id\x18\x02 \x01(\t\x12\x11\n\tcourse_id\x18\x03 \x01(\t\x12\x0c\n\x04term\x18\x04 \x01(\t\x12\x15\n\racademic_year\x18\x05 \x01(\t\x12\r\n\x05grade\x18\x06 \x01(\t\"o\n\x12SubmitGradeRequest\x12\x12\n\nstudent_id\x18\x01 \x01(\t\x12\x11\n\tcourse_id\x18\x02 \x01(\t\x12\x0c\n\x04term\x18\x03 \x01(\t\x12\x15\n\racademic_year\x18\x04 \x01(\t\x12\r\n\x05grade\x18\x05 \x01(\t\"9\n\x13SubmitGradeResponse\x12\"\n\x06record\x18\x01 \x01(\x0b\x32\x12.grade.GradeRecord\"6\n\x11StudentGradeInput\x12\x12\n\nstudent_id\x18\x01 \x01(\t\x12\r\n\x05grade\x18\x02 \x01(\t\"x\n\x13SubmitGradesRequest\x12\x11\n\tcourse_id\x18\x01 \x01(\t\x12\x0c\n\x04term\x18\x02 \x01(\t\x12\x15\n\racademic_year\x18\x03 \x01(\t\x12)\n\x07records\x18\x04 \x03(\x0b\x32\x18.grade.StudentGradeInput\";\n\x14SubmitGradesResponse\x12#\n\x07records\x18\x01 \x03(\x0b\x32\x12.grade.GradeRecord\"\'\n\x11ListGradesRequest\x12\x12\n\nstudent_id\x18\x01 \x01(\t\"8\n\x12ListGradesResponse\x12\"\n\x06grades\x18\x01 \x03(\x0b\x32\x12.grade.GradeRecord\"Q\n\x17ListCourseGradesRequest\x12\x11\n\tcourse_id\x18\x01 \x01(\t\x12\x0c\n\x04term\x18\x02 \x01(\t\x12\x15\n\racademic_year\x18\x03 \x01(\t\">\n\x18ListCourseGradesResponse\x12\"\n\x06grades\x18\x01 \x03(\x0b\x32\x12.grade.GradeRecord\"]\n\x0fTermCourseGrade\x12\x11\n\tcourse_id\x18\x01 \x01(\t\x12\x13\n\x0b\x63ourse_code\x18\x02 \x01(\t\x12\x13\n\x0b\x63ourse_name\x18\x03 \x01(\t\x12\r\n\x05grade\x18\x04 \x01(\t\"_\n\x0fTermGradesGroup\x12\x15\n\racademic_year\x18\x01 \x01(\t\x12\x0c\n\x04term\x18\x02 \x01(\t\x12\'\n\x07\x63ourses\x18\x03 \x03(\x0b\x32\x16.grade.TermCourseGrade\"2\n\x1cListStudentTermGradesRequest\x12\x12\n\nstudent_id\x18\x01 \x01(\t\"G\n\x1dListStudentTermGradesResponse\x12&\n\x06groups\x18\x01 \x03(\x0b\x32\x16.grade.TermGradesGroup2\x99\x03\n\x0cGradeService\x12\x44\n\x0bSubmitGrade\x12\x19.grade.SubmitGradeRequest\x1a\x1a.grade.SubmitGradeResponse\x12G\n\x0cSubmitGrades\x12\x1a.grade.SubmitGradesRequest\x1a\x1b.grade.SubmitGradesResponse\x12\x41\n\nListGrades\x12\x18.grade.ListGradesRequest\x1a\x19.grade.ListGradesResponse\x12S\n\x10ListCourseGrades\x12\x1e.grade.ListCourseGradesRequest\x1a\x1f.grade.ListCourseGradesResponse\x12\x62\n\x15ListStudentTermGrades\x12#.grade.ListStudentTermGradesRequest\x1a$.grade.ListStudentTermGradesResponseB\x15\n\x11\x63om.stdiscm.gradeP\x01\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,15 +33,33 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\021com.stdiscm.gradeP\001'
   _globals['_GRADERECORD']._serialized_start=22
-  _globals['_GRADERECORD']._serialized_end=115
-  _globals['_SUBMITGRADEREQUEST']._serialized_start=117
-  _globals['_SUBMITGRADEREQUEST']._serialized_end=205
-  _globals['_SUBMITGRADERESPONSE']._serialized_start=207
-  _globals['_SUBMITGRADERESPONSE']._serialized_end=264
-  _globals['_LISTGRADESREQUEST']._serialized_start=266
-  _globals['_LISTGRADESREQUEST']._serialized_end=305
-  _globals['_LISTGRADESRESPONSE']._serialized_start=307
-  _globals['_LISTGRADESRESPONSE']._serialized_end=363
-  _globals['_GRADESERVICE']._serialized_start=366
-  _globals['_GRADESERVICE']._serialized_end=517
+  _globals['_GRADERECORD']._serialized_end=138
+  _globals['_SUBMITGRADEREQUEST']._serialized_start=140
+  _globals['_SUBMITGRADEREQUEST']._serialized_end=251
+  _globals['_SUBMITGRADERESPONSE']._serialized_start=253
+  _globals['_SUBMITGRADERESPONSE']._serialized_end=310
+  _globals['_STUDENTGRADEINPUT']._serialized_start=312
+  _globals['_STUDENTGRADEINPUT']._serialized_end=366
+  _globals['_SUBMITGRADESREQUEST']._serialized_start=368
+  _globals['_SUBMITGRADESREQUEST']._serialized_end=488
+  _globals['_SUBMITGRADESRESPONSE']._serialized_start=490
+  _globals['_SUBMITGRADESRESPONSE']._serialized_end=549
+  _globals['_LISTGRADESREQUEST']._serialized_start=551
+  _globals['_LISTGRADESREQUEST']._serialized_end=590
+  _globals['_LISTGRADESRESPONSE']._serialized_start=592
+  _globals['_LISTGRADESRESPONSE']._serialized_end=648
+  _globals['_LISTCOURSEGRADESREQUEST']._serialized_start=650
+  _globals['_LISTCOURSEGRADESREQUEST']._serialized_end=731
+  _globals['_LISTCOURSEGRADESRESPONSE']._serialized_start=733
+  _globals['_LISTCOURSEGRADESRESPONSE']._serialized_end=795
+  _globals['_TERMCOURSEGRADE']._serialized_start=797
+  _globals['_TERMCOURSEGRADE']._serialized_end=890
+  _globals['_TERMGRADESGROUP']._serialized_start=892
+  _globals['_TERMGRADESGROUP']._serialized_end=987
+  _globals['_LISTSTUDENTTERMGRADESREQUEST']._serialized_start=989
+  _globals['_LISTSTUDENTTERMGRADESREQUEST']._serialized_end=1039
+  _globals['_LISTSTUDENTTERMGRADESRESPONSE']._serialized_start=1041
+  _globals['_LISTSTUDENTTERMGRADESRESPONSE']._serialized_end=1112
+  _globals['_GRADESERVICE']._serialized_start=1115
+  _globals['_GRADESERVICE']._serialized_end=1524
 # @@protoc_insertion_point(module_scope)

@@ -39,6 +39,11 @@ class CourseServiceStub(object):
                 request_serializer=course__pb2.ListCoursesRequest.SerializeToString,
                 response_deserializer=course__pb2.ListCoursesResponse.FromString,
                 _registered_method=True)
+        self.ListFacultyCourses = channel.unary_unary(
+                '/course.CourseService/ListFacultyCourses',
+                request_serializer=course__pb2.ListFacultyCoursesRequest.SerializeToString,
+                response_deserializer=course__pb2.ListCoursesResponse.FromString,
+                _registered_method=True)
         self.GetCourse = channel.unary_unary(
                 '/course.CourseService/GetCourse',
                 request_serializer=course__pb2.GetCourseRequest.SerializeToString,
@@ -50,6 +55,12 @@ class CourseServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def ListCourses(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListFacultyCourses(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -67,6 +78,11 @@ def add_CourseServiceServicer_to_server(servicer, server):
             'ListCourses': grpc.unary_unary_rpc_method_handler(
                     servicer.ListCourses,
                     request_deserializer=course__pb2.ListCoursesRequest.FromString,
+                    response_serializer=course__pb2.ListCoursesResponse.SerializeToString,
+            ),
+            'ListFacultyCourses': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListFacultyCourses,
+                    request_deserializer=course__pb2.ListFacultyCoursesRequest.FromString,
                     response_serializer=course__pb2.ListCoursesResponse.SerializeToString,
             ),
             'GetCourse': grpc.unary_unary_rpc_method_handler(
@@ -101,6 +117,33 @@ class CourseService(object):
             target,
             '/course.CourseService/ListCourses',
             course__pb2.ListCoursesRequest.SerializeToString,
+            course__pb2.ListCoursesResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListFacultyCourses(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/course.CourseService/ListFacultyCourses',
+            course__pb2.ListFacultyCoursesRequest.SerializeToString,
             course__pb2.ListCoursesResponse.FromString,
             options,
             channel_credentials,

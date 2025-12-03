@@ -44,6 +44,11 @@ class EnrollmentServiceStub(object):
                 request_serializer=enrollment__pb2.ListStudentEnrollmentsRequest.SerializeToString,
                 response_deserializer=enrollment__pb2.ListStudentEnrollmentsResponse.FromString,
                 _registered_method=True)
+        self.ListCourseRoster = channel.unary_unary(
+                '/enrollment.EnrollmentService/ListCourseRoster',
+                request_serializer=enrollment__pb2.ListCourseRosterRequest.SerializeToString,
+                response_deserializer=enrollment__pb2.ListCourseRosterResponse.FromString,
+                _registered_method=True)
         self.DropEnrollment = channel.unary_unary(
                 '/enrollment.EnrollmentService/DropEnrollment',
                 request_serializer=enrollment__pb2.DropEnrollmentRequest.SerializeToString,
@@ -61,6 +66,12 @@ class EnrollmentServiceServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def ListStudentEnrollments(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListCourseRoster(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -84,6 +95,11 @@ def add_EnrollmentServiceServicer_to_server(servicer, server):
                     servicer.ListStudentEnrollments,
                     request_deserializer=enrollment__pb2.ListStudentEnrollmentsRequest.FromString,
                     response_serializer=enrollment__pb2.ListStudentEnrollmentsResponse.SerializeToString,
+            ),
+            'ListCourseRoster': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListCourseRoster,
+                    request_deserializer=enrollment__pb2.ListCourseRosterRequest.FromString,
+                    response_serializer=enrollment__pb2.ListCourseRosterResponse.SerializeToString,
             ),
             'DropEnrollment': grpc.unary_unary_rpc_method_handler(
                     servicer.DropEnrollment,
@@ -145,6 +161,33 @@ class EnrollmentService(object):
             '/enrollment.EnrollmentService/ListStudentEnrollments',
             enrollment__pb2.ListStudentEnrollmentsRequest.SerializeToString,
             enrollment__pb2.ListStudentEnrollmentsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListCourseRoster(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/enrollment.EnrollmentService/ListCourseRoster',
+            enrollment__pb2.ListCourseRosterRequest.SerializeToString,
+            enrollment__pb2.ListCourseRosterResponse.FromString,
             options,
             channel_credentials,
             insecure,

@@ -40,6 +40,11 @@ export async function getCourses() {
   return resp.data;
 }
 
+export async function getAssignedCourses() {
+  const resp = await api.get('/courses/assigned');
+  return resp.data;
+}
+
 export async function enrollInCourse(courseId) {
   const resp = await api.post('/enrollments/', { course_id: courseId });
   return resp.data;
@@ -63,9 +68,20 @@ export async function submitGrade({ student_id, course_id, term, grade }) {
   return resp.data;
 }
 
+export async function submitGradesBulk({ course_id, term, academic_year, records }) {
+  // Faculty-only endpoint for bulk grade upsert.
+  const resp = await api.post('/grades/bulk', { course_id, term, academic_year, records });
+  return resp.data;
+}
+
 export async function getFacultyGrades() {
   // Placeholder: if an admin listing is added, target it here. For now, reuse /grades/my.
   const resp = await api.get('/grades/my');
+  return resp.data;
+}
+
+export async function getCourseRoster(courseId) {
+  const resp = await api.get(`/enrollments/course/${courseId}/roster`);
   return resp.data;
 }
 

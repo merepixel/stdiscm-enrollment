@@ -49,6 +49,10 @@ class Course(Base):
     title = Column(Text, nullable=False)
     description = Column(Text)
     capacity = Column(Integer, nullable=False)
+    term = Column(String(32))
+    academic_year = Column(String(32))
+    section = Column(String(16))
+    assigned_faculty_id = Column(UUID(as_uuid=True), nullable=True)
 
 
 app = FastAPI(title="Course Service", version="0.1.0")
@@ -66,6 +70,10 @@ class CourseOut(BaseModel):
     title: str
     description: Optional[str] = None
     capacity: int
+    term: Optional[str] = None
+    academic_year: Optional[str] = None
+    section: Optional[str] = None
+    assigned_faculty_id: Optional[str] = None
 
 
 @app.middleware("http")
@@ -119,8 +127,11 @@ def health_db():
 
 # ---------- REST endpoints ----------
 @app.get("/courses", response_model=List[CourseOut])
-def list_courses(db: Session = Depends(get_db)):
-    rows = db.query(Course).all()
+def list_courses(assigned_faculty_id: Optional[str] = None, db: Session = Depends(get_db)):
+    query = db.query(Course)
+    if assigned_faculty_id:
+        query = query.filter(Course.assigned_faculty_id == assigned_faculty_id)
+    rows = query.all()
     return [
         CourseOut(
             id=str(r.id),
@@ -128,6 +139,10 @@ def list_courses(db: Session = Depends(get_db)):
             title=r.title,
             description=r.description,
             capacity=r.capacity,
+            term=r.term,
+            academic_year=r.academic_year,
+            section=r.section,
+            assigned_faculty_id=str(r.assigned_faculty_id) if r.assigned_faculty_id else None,
         )
         for r in rows
     ]
@@ -144,6 +159,10 @@ def get_course(course_id: str, db: Session = Depends(get_db)):
         title=row.title,
         description=row.description,
         capacity=row.capacity,
+        term=row.term,
+        academic_year=row.academic_year,
+        section=row.section,
+        assigned_faculty_id=str(row.assigned_faculty_id) if row.assigned_faculty_id else None,
     )
 
 
@@ -160,6 +179,10 @@ class CourseService(course_pb2_grpc.CourseServiceServicer):
                     title=r.title,
                     description=r.description or "",
                     capacity=r.capacity or 0,
+                    term=r.term or "",
+                    academic_year=r.academic_year or "",
+                    section=r.section or "",
+                    assigned_faculty_id=str(r.assigned_faculty_id) if r.assigned_faculty_id else "",
                 )
                 for r in rows
             ]
@@ -185,8 +208,35 @@ class CourseService(course_pb2_grpc.CourseServiceServicer):
                     title=row.title,
                     description=row.description or "",
                     capacity=row.capacity or 0,
+                    term=row.term or "",
+                    academic_year=row.academic_year or "",
+                    section=row.section or "",
+                    assigned_faculty_id=str(row.assigned_faculty_id) if row.assigned_faculty_id else "",
                 )
             )
+        finally:
+            db.close()
+
+    def ListFacultyCourses(self, request, context):
+        """Return courses assigned to the given faculty UUID."""
+        db = SessionLocal()
+        try:
+            rows = db.query(Course).filter(Course.assigned_faculty_id == request.faculty_id).all()
+            courses = [
+                course_pb2.Course(
+                    id=str(r.id),
+                    code=r.code,
+                    title=r.title,
+                    description=r.description or "",
+                    capacity=r.capacity or 0,
+                    term=r.term or "",
+                    academic_year=r.academic_year or "",
+                    section=r.section or "",
+                    assigned_faculty_id=str(r.assigned_faculty_id) if r.assigned_faculty_id else "",
+                )
+                for r in rows
+            ]
+            return course_pb2.ListCoursesResponse(courses=courses)
         finally:
             db.close()
 
