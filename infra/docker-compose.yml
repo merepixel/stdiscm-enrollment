@@ -15,6 +15,7 @@ services:
       - --entrypoints.web.address=:80
     ports:
       - "80:80"
+      - "8080:80"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
@@ -75,6 +76,35 @@ services:
       - ds-net
     ports:
       - "8000:8000"
+
+  gateway-2:
+    container_name: gateway-2
+    build:
+      context: ..
+      dockerfile: gateway/Dockerfile
+    depends_on:
+      - db
+      - auth-service
+      - course-service
+      - enrollment-service
+      - grade-service
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/enrollment
+      AUTH_HTTP_TARGET: http://auth-service:8001
+      AUTH_GRPC_TARGET: auth-service:50051
+      COURSE_GRPC_TARGET: course-service:50052
+      ENROLLMENT_GRPC_TARGET: enrollment-service:50053
+      GRADE_GRPC_TARGET: grade-service:50054
+      CORS_ALLOW_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      CURRENT_TERM: "2"
+      CURRENT_ACADEMIC_YEAR: "2025-2026"
+    labels:
+      - traefik.enable=true
+      - traefik.http.services.gateway.loadbalancer.server.port=8000
+      - traefik.http.services.gateway.loadbalancer.healthcheck.path=/health
+      - traefik.http.services.gateway.loadbalancer.healthcheck.interval=10s
+    networks:
+      - ds-net
 
   auth-service:
     build:
@@ -185,8 +215,8 @@ services:
     container_name: frontend
     build: ../frontend
     environment:
-      VITE_API_BASE_URL: http://localhost:8000/api
-      VITE_API_BASE: http://localhost:8000/api
+      VITE_API_BASE_URL: http://localhost:8080/api
+      VITE_API_BASE: http://localhost:8080/api
     ports:
       - "3000:3000"
     networks:

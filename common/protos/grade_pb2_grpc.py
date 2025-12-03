@@ -44,6 +44,11 @@ class GradeServiceStub(object):
                 request_serializer=grade__pb2.SubmitGradesRequest.SerializeToString,
                 response_deserializer=grade__pb2.SubmitGradesResponse.FromString,
                 _registered_method=True)
+        self.GetGradesByStudent = channel.unary_unary(
+                '/grade.GradeService/GetGradesByStudent',
+                request_serializer=grade__pb2.GetGradesRequest.SerializeToString,
+                response_deserializer=grade__pb2.GradesResponse.FromString,
+                _registered_method=True)
         self.ListGrades = channel.unary_unary(
                 '/grade.GradeService/ListGrades',
                 request_serializer=grade__pb2.ListGradesRequest.SerializeToString,
@@ -71,6 +76,12 @@ class GradeServiceServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def SubmitGrades(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetGradesByStudent(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -106,6 +117,11 @@ def add_GradeServiceServicer_to_server(servicer, server):
                     servicer.SubmitGrades,
                     request_deserializer=grade__pb2.SubmitGradesRequest.FromString,
                     response_serializer=grade__pb2.SubmitGradesResponse.SerializeToString,
+            ),
+            'GetGradesByStudent': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetGradesByStudent,
+                    request_deserializer=grade__pb2.GetGradesRequest.FromString,
+                    response_serializer=grade__pb2.GradesResponse.SerializeToString,
             ),
             'ListGrades': grpc.unary_unary_rpc_method_handler(
                     servicer.ListGrades,
@@ -177,6 +193,33 @@ class GradeService(object):
             '/grade.GradeService/SubmitGrades',
             grade__pb2.SubmitGradesRequest.SerializeToString,
             grade__pb2.SubmitGradesResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetGradesByStudent(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/grade.GradeService/GetGradesByStudent',
+            grade__pb2.GetGradesRequest.SerializeToString,
+            grade__pb2.GradesResponse.FromString,
             options,
             channel_credentials,
             insecure,

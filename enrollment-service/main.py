@@ -1,18 +1,18 @@
 import concurrent.futures as futures
-import logging
 import enum
+import logging
 import os
 import sys
 import threading
 import time
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 from uuid import uuid4
 
 import grpc
 from fastapi import Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel
-from sqlalchemy import Column, ForeignKey, String, Integer, text, func, create_engine
+from sqlalchemy import Column, Integer, String, create_engine, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
@@ -35,7 +35,7 @@ GRPC_PORT = int(os.getenv("ENROLLMENT_GRPC_PORT", "50053"))
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,
-    connect_args={"options": "-c search_path=enrollment,course_catalog,auth,public"},
+    connect_args={"options": "-c search_path=enrollment,public"},
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
@@ -59,21 +59,24 @@ class Enrollment(Base):
 
 class Course(Base):
     __tablename__ = "courses"
-    __table_args__ = {"schema": "course_catalog"}
+    __table_args__ = {"schema": "enrollment"}
 
     id = Column(UUID(as_uuid=True), primary_key=True)
     code = Column(String, nullable=False)
-    capacity = Column(Integer, nullable=False)
-    term = Column(String)
-    academic_year = Column(String)
+    title = Column(String, nullable=False, default="")
+    capacity = Column(Integer, nullable=False, default=0)
+    term = Column(String(32))
+    academic_year = Column(String(32))
+    section = Column(String(16))
+    assigned_faculty_id = Column(UUID(as_uuid=True))
 
 
-class User(Base):
-    __tablename__ = "users"
-    __table_args__ = {"schema": "auth"}
+class Student(Base):
+    __tablename__ = "students"
+    __table_args__ = {"schema": "enrollment"}
 
     id = Column(UUID(as_uuid=True), primary_key=True)
-    name = Column(String, nullable=False)
+    name = Column(String, nullable=False, default="")
     user_number = Column(String(32))
 
 
@@ -125,6 +128,157 @@ def get_db():
         db.close()
 
 
+def ensure_schema():
+    """Ensure enrollment-owned tables and constraints exist, with optional backfill from shared schemas."""
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS enrollment.courses (
+                        id UUID PRIMARY KEY,
+                        code VARCHAR(64) NOT NULL,
+                        title TEXT NOT NULL DEFAULT '',
+                        capacity INTEGER NOT NULL DEFAULT 0,
+                        term VARCHAR(32),
+                        academic_year VARCHAR(32),
+                        section VARCHAR(16),
+                        assigned_faculty_id UUID,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS enrollment.students (
+                        id UUID PRIMARY KEY,
+                        name TEXT NOT NULL DEFAULT '',
+                        user_number VARCHAR(32)
+                    )
+                    """
+                )
+            )
+            conn.execute(text("ALTER TABLE enrollment.enrollments DROP CONSTRAINT IF EXISTS enrollments_student_id_fkey;"))
+            conn.execute(text("ALTER TABLE enrollment.enrollments DROP CONSTRAINT IF EXISTS enrollments_course_id_fkey;"))
+
+            # Opportunistic backfill from shared schemas if available.
+            try:
+                conn.execute(
+                    text(
+                        """
+                        INSERT INTO enrollment.courses (id, code, title, capacity, term, academic_year, section, assigned_faculty_id)
+                        SELECT id, COALESCE(code, ''), COALESCE(title, ''), COALESCE(capacity, 0),
+                               term, academic_year, section, assigned_faculty_id
+                        FROM course_catalog.courses c
+                        WHERE NOT EXISTS (
+                            SELECT 1 FROM enrollment.courses ec WHERE ec.id = c.id
+                        )
+                        """
+                    )
+                )
+            except Exception:
+                logger.warning("Course backfill skipped (course_catalog.courses unavailable)")
+
+            try:
+                conn.execute(
+                    text(
+                        """
+                        INSERT INTO enrollment.students (id, name, user_number)
+                        SELECT id, COALESCE(name, ''), user_number
+                        FROM auth.users u
+                        WHERE NOT EXISTS (
+                            SELECT 1 FROM enrollment.students es WHERE es.id = u.id
+                        )
+                        """
+                    )
+                )
+            except Exception:
+                logger.warning("Student backfill skipped (auth.users unavailable)")
+
+            # Ensure placeholder records exist for any referenced IDs.
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO enrollment.courses (id, code, title, capacity)
+                    SELECT DISTINCT e.course_id, '', '', 0
+                    FROM enrollment.enrollments e
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM enrollment.courses c WHERE c.id = e.course_id
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO enrollment.students (id, name, user_number)
+                    SELECT DISTINCT e.student_id, '', NULL
+                    FROM enrollment.enrollments e
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM enrollment.students s WHERE s.id = e.student_id
+                    )
+                    """
+                )
+            )
+
+            conn.execute(
+                text(
+                    """
+                    DO $$
+                    BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM pg_constraint
+                            WHERE conname = 'enrollments_student_fk'
+                              AND conrelid = 'enrollment.enrollments'::regclass
+                        ) THEN
+                            ALTER TABLE enrollment.enrollments
+                            ADD CONSTRAINT enrollments_student_fk FOREIGN KEY (student_id) REFERENCES enrollment.students (id) ON DELETE CASCADE;
+                        END IF;
+                    END$$;
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    DO $$
+                    BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM pg_constraint
+                            WHERE conname = 'enrollments_course_fk'
+                              AND conrelid = 'enrollment.enrollments'::regclass
+                        ) THEN
+                            ALTER TABLE enrollment.enrollments
+                            ADD CONSTRAINT enrollments_course_fk FOREIGN KEY (course_id) REFERENCES enrollment.courses (id) ON DELETE CASCADE;
+                        END IF;
+                    END$$;
+                    """
+                )
+            )
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_enrollments_student ON enrollment.enrollments (student_id);"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_enrollments_course ON enrollment.enrollments (course_id);"))
+            conn.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_enrollments_student_course ON enrollment.enrollments (student_id, course_id);"
+                )
+            )
+    except Exception:
+        logger.exception("Failed to ensure enrollment schema is up to date")
+        raise
+
+
+def ensure_student(db: Session, *, student_id: str, name: str = "", user_number: str = "") -> None:
+    """Make sure a student row exists for roster lookups."""
+    exists = db.query(Student.id).filter(Student.id == student_id).first()
+    if exists:
+        return
+    db.add(Student(id=student_id, name=name or "", user_number=user_number or None))
+    db.commit()
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "enrollment-service"}
@@ -146,6 +300,8 @@ def enroll(body: EnrollRequestBody, db: Session = Depends(get_db)):
     course = db.query(Course).filter(Course.id == body.course_id).first()
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
+
+    ensure_student(db, student_id=body.student_id)
 
     # Prevent enrolling in multiple sections of the same course code.
     existing_same_course = (
@@ -210,8 +366,8 @@ def list_enrollments(student_id: str, db: Session = Depends(get_db)):
 def course_roster(course_id: str, db: Session = Depends(get_db)):
     """Roster for a course_id (ENROLLED only) including student name and number."""
     rows = (
-        db.query(Enrollment, User)
-        .join(User, User.id == Enrollment.student_id)
+        db.query(Enrollment, Student)
+        .join(Student, Student.id == Enrollment.student_id)
         .filter(Enrollment.course_id == course_id, Enrollment.status == EnrollmentStatus.ENROLLED.value)
         .all()
     )
@@ -273,6 +429,7 @@ class EnrollmentService(enrollment_pb2_grpc.EnrollmentServiceServicer):
                 context.set_details("Already enrolled in another section of this course")
                 return enrollment_pb2.EnrollResponse()
 
+            ensure_student(db, student_id=request.student_id)
             enr = Enrollment(student_id=request.student_id, course_id=request.course_id, status=status)
             db.add(enr)
             db.commit()
@@ -324,8 +481,8 @@ class EnrollmentService(enrollment_pb2_grpc.EnrollmentServiceServicer):
         db = SessionLocal()
         try:
             rows = (
-                db.query(Enrollment, User)
-                .join(User, User.id == Enrollment.student_id)
+                db.query(Enrollment, Student)
+                .join(Student, Student.id == Enrollment.student_id)
                 .filter(Enrollment.course_id == request.course_id, Enrollment.status == EnrollmentStatus.ENROLLED.value)
                 .all()
             )
@@ -383,5 +540,6 @@ def serve_grpc():
 
 @app.on_event("startup")
 def start_grpc_server():
+    ensure_schema()
     thread = threading.Thread(target=serve_grpc, daemon=True)
     thread.start()

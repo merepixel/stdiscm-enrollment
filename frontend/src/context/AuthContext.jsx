@@ -35,9 +35,10 @@ export function AuthProvider({ children }) {
 
   const logout = () => {
     setToken(null);
+    localStorage.removeItem('enrollment_user');
     setAuthToken(null);
     setUser(null);
-    navigate('/login');
+    navigate('/login', { replace: true });
   };
 
   const value = useMemo(

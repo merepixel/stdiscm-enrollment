@@ -54,3 +54,10 @@ Restart any node with `docker compose start <service>`.
 
 - End-to-end tests default to the gateway at `BASE_URL=http://localhost:8000`.
 - Quick smoke: `./scripts/smoke.sh` (waits for gateway, hits `/api/ping` + `/api/smoke/courses`).
+
+## Authentication and logout (JWT)
+
+- Auth service issues stateless JWTs signed with a shared key; expiry/refresh are handled by the token itself (no server-side sessions or revocation list).
+- The frontend stores the access token in `localStorage` under `enrollment_jwt` (see `frontend/src/api/client.js`) and caches user metadata in `localStorage` as `enrollment_user`.
+- The navbar exposes a `Logout` button for authenticated users; clicking it clears both local storage entries via `AuthContext.logout`, resets in-memory auth state, and redirects to the login page.
+- Protected routes simply check for the presence of the JWT; if the token is expired or invalid the backend rejects requests and users can log back in to obtain a fresh token.

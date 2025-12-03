@@ -42,11 +42,30 @@ CREATE INDEX IF NOT EXISTS idx_courses_assigned_faculty_id ON course_catalog.cou
 CREATE UNIQUE INDEX IF NOT EXISTS idx_courses_code_term_year_section
     ON course_catalog.courses (code, term, academic_year, section);
 
--- Enrollment service owned table.
+-- Enrollment service owned tables (self-contained).
+CREATE TABLE IF NOT EXISTS enrollment.courses (
+    id UUID PRIMARY KEY,
+    code VARCHAR(64) NOT NULL,
+    title TEXT NOT NULL DEFAULT '',
+    capacity INTEGER NOT NULL DEFAULT 0,
+    term VARCHAR(32),
+    academic_year VARCHAR(32),
+    section VARCHAR(16),
+    assigned_faculty_id UUID,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS enrollment.students (
+    id UUID PRIMARY KEY,
+    name TEXT NOT NULL DEFAULT '',
+    user_number VARCHAR(32)
+);
+
 CREATE TABLE IF NOT EXISTS enrollment.enrollments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    student_id UUID NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
-    course_id UUID NOT NULL REFERENCES course_catalog.courses (id) ON DELETE CASCADE,
+    student_id UUID NOT NULL REFERENCES enrollment.students (id) ON DELETE CASCADE,
+    course_id UUID NOT NULL REFERENCES enrollment.courses (id) ON DELETE CASCADE,
     status TEXT NOT NULL CHECK (status IN ('ENROLLED', 'WAITLISTED', 'DROPPED')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -58,17 +77,33 @@ CREATE INDEX IF NOT EXISTS idx_enrollments_course ON enrollment.enrollments (cou
 -- Grade service owned table.
 CREATE TABLE IF NOT EXISTS grade.grades (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    student_id UUID NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
-    course_id UUID NOT NULL REFERENCES course_catalog.courses (id) ON DELETE CASCADE,
+    student_id UUID NOT NULL,
+    course_id UUID,
+    course_code VARCHAR(64) NOT NULL,
+    course_name TEXT NOT NULL,
     term VARCHAR(32) NOT NULL,
+    academic_year VARCHAR(32) NOT NULL DEFAULT '',
     grade TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (student_id, course_id, term)
+    UNIQUE (student_id, course_code, term, academic_year)
 );
 CREATE INDEX IF NOT EXISTS idx_grades_student ON grade.grades (student_id);
 CREATE INDEX IF NOT EXISTS idx_grades_course ON grade.grades (course_id);
+CREATE INDEX IF NOT EXISTS idx_grades_course_code ON grade.grades (course_code);
+ALTER TABLE grade.grades ADD COLUMN IF NOT EXISTS course_code VARCHAR(64);
+ALTER TABLE grade.grades ADD COLUMN IF NOT EXISTS course_name TEXT;
 ALTER TABLE grade.grades ADD COLUMN IF NOT EXISTS academic_year VARCHAR(32);
+UPDATE grade.grades SET course_code = '' WHERE course_code IS NULL;
+UPDATE grade.grades SET course_name = '' WHERE course_name IS NULL;
+ALTER TABLE grade.grades ALTER COLUMN course_id DROP NOT NULL;
+ALTER TABLE grade.grades ALTER COLUMN academic_year SET DEFAULT '';
+ALTER TABLE grade.grades ALTER COLUMN course_code SET NOT NULL;
+ALTER TABLE grade.grades ALTER COLUMN course_name SET NOT NULL;
+ALTER TABLE grade.grades ALTER COLUMN academic_year SET NOT NULL;
+UPDATE grade.grades SET academic_year = '' WHERE academic_year IS NULL;
+ALTER TABLE grade.grades DROP CONSTRAINT IF EXISTS grades_student_id_course_id_term_key;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_grades_student_course_term_year ON grade.grades (student_id, course_code, term, academic_year);
 
 -- Seed demo users (plain text passwords allowed by auth-service fallback).
 INSERT INTO auth.users (id, user_number, name, email, role, password_hash)
@@ -92,14 +127,26 @@ SET title = EXCLUDED.title,
     section = EXCLUDED.section,
     assigned_faculty_id = EXCLUDED.assigned_faculty_id;
 
+-- Populate enrollment-local copies of courses/students.
+INSERT INTO enrollment.courses (id, code, title, capacity, term, academic_year, section, assigned_faculty_id)
+SELECT id, code, title, capacity, term, academic_year, section, assigned_faculty_id
+FROM course_catalog.courses c
+WHERE NOT EXISTS (SELECT 1 FROM enrollment.courses ec WHERE ec.id = c.id);
+
+INSERT INTO enrollment.students (id, name, user_number)
+SELECT id, name, user_number
+FROM auth.users u
+WHERE NOT EXISTS (SELECT 1 FROM enrollment.students es WHERE es.id = u.id);
+
 -- Seed past grade.
 
-INSERT INTO grade.grades (student_id, course_id, term, academic_year,grade)
+INSERT INTO grade.grades (student_id, course_id, course_code, course_name, term, academic_year, grade)
 VALUES (
     '00000000-0000-0000-0000-000000000001', 
     '10000000-0000-0000-0000-000000000001', 
+    'CS101',
+    'Intro to CS',
     '1',                                    
     '2025-2026',                            
     '4.0'                                  
 );
-

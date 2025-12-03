@@ -3,7 +3,7 @@ import axios from 'axios';
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL ||
   import.meta.env.VITE_API_BASE ||
-  'http://localhost:8000/api';
+  '/api';
 const TOKEN_KEY = 'enrollment_jwt';
 
 const api = axios.create({

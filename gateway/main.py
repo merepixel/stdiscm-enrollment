@@ -113,6 +113,87 @@ def grpc_unavailable(service: str, exc: grpc.RpcError):
     raise HTTPException(status_code=503, detail=f"{service} service temporarily unavailable: {detail}")
 
 
+def course_row_to_dict(row, enrolled_map: dict):
+    enrolled = enrolled_map.get(str(row["id"]), 0)
+    capacity = row["capacity"] or 0
+    return {
+        "id": str(row["id"]),
+        "code": row["code"],
+        "title": row["title"],
+        "description": row.get("description", ""),
+        "capacity": capacity,
+        "term": row.get("term", "") or "",
+        "academic_year": row.get("academic_year", "") or "",
+        "section": row.get("section", "") or "",
+        "assigned_faculty_id": str(row["assigned_faculty_id"]) if row.get("assigned_faculty_id") else "",
+        "enrolled": enrolled,
+        "available": max(capacity - enrolled, 0),
+    }
+
+
+def fetch_courses_from_db(faculty_id: str | None = None):
+    """Local DB fallback for course metadata when course-service is down."""
+    try:
+        query = """
+            SELECT id, code, title, description, capacity, term, academic_year, section, assigned_faculty_id
+            FROM course_catalog.courses
+        """
+        params = {}
+        if faculty_id:
+            query += " WHERE assigned_faculty_id = :faculty_id"
+            params["faculty_id"] = faculty_id
+        with engine.connect() as conn:
+            return conn.execute(text(query), params).mappings().all()
+    except Exception as exc:
+        logger.error("DB fallback for courses failed: %s", exc)
+        raise HTTPException(status_code=503, detail="course catalog temporarily unavailable")
+
+
+def fetch_course_metadata(course_id: str):
+    """Fetch course metadata needed for grade submissions."""
+    try:
+        course_resp = course_stub.GetCourse(course_pb2.GetCourseRequest(id=course_id))
+        return {
+            "course_id": course_resp.course.id,
+            "course_code": getattr(course_resp.course, "code", ""),
+            "course_name": getattr(course_resp.course, "title", ""),
+            "term": getattr(course_resp.course, "term", ""),
+            "academic_year": getattr(course_resp.course, "academic_year", ""),
+        }
+    except grpc.RpcError as exc:
+        log_grpc_error("course", exc)
+        try:
+            with engine.connect() as conn:
+                row = (
+                    conn.execute(
+                        text(
+                            """
+                            SELECT id, code, title, term, academic_year
+                            FROM course_catalog.courses
+                            WHERE id = :course_id
+                            """
+                        ),
+                        {"course_id": course_id},
+                    )
+                    .mappings()
+                    .first()
+                )
+            if not row:
+                raise HTTPException(status_code=404, detail="Course not found")
+            return {
+                "course_id": str(row["id"]),
+                "course_code": row["code"],
+                "course_name": row["title"],
+                "term": row["term"] or "",
+                "academic_year": row["academic_year"] or "",
+            }
+        except HTTPException:
+            raise
+        except Exception as db_exc:
+            logger.error("DB fallback for course metadata failed: %s", db_exc)
+            raise HTTPException(status_code=503, detail="course catalog temporarily unavailable")
+
+
 @app.middleware("http")
 async def jwt_middleware(request: Request, call_next):
     request.state.user = None
@@ -258,7 +339,19 @@ def list_courses():
             )
         return {"courses": courses}
     except grpc.RpcError as exc:
-        grpc_unavailable("course", exc)
+        log_grpc_error("course", exc)
+        counts = enrollment_counts_by_course()
+        rows = fetch_courses_from_db()
+        courses = []
+        for row in rows:
+            term = row["term"] or ""
+            ay = row["academic_year"] or ""
+            if CURRENT_TERM and term != CURRENT_TERM:
+                continue
+            if CURRENT_ACADEMIC_YEAR and ay != CURRENT_ACADEMIC_YEAR:
+                continue
+            courses.append(course_row_to_dict(row, counts))
+        return {"courses": courses}
 
 
 @course_router.get("/assigned")
@@ -289,7 +382,11 @@ def list_my_courses(user=Depends(require_user)):
         ]
         return {"courses": courses}
     except grpc.RpcError as exc:
-        grpc_unavailable("course", exc)
+        log_grpc_error("course", exc)
+        counts = enrollment_counts_by_course()
+        rows = fetch_courses_from_db(faculty_id=user["user_id"])
+        courses = [course_row_to_dict(row, counts) for row in rows]
+        return {"courses": courses}
 
 
 @course_router.get("/{course_id}")
@@ -313,7 +410,27 @@ def get_course(course_id: str):
             "available": max(c.capacity - enrolled, 0),
         }
     except grpc.RpcError as exc:
-        grpc_unavailable("course", exc)
+        log_grpc_error("course", exc)
+        counts = enrollment_counts_by_course()
+        with engine.connect() as conn:
+            row = (
+                conn.execute(
+                    text(
+                        """
+                        SELECT id, code, title, description, capacity, term, academic_year, section, assigned_faculty_id
+                        FROM course_catalog.courses
+                        WHERE id = :course_id
+                        """
+                    ),
+                    {"course_id": course_id},
+                )
+                .mappings()
+                .first()
+            )
+        if not row:
+            raise HTTPException(status_code=404, detail="Course not found")
+        enrolled = counts.get(course_id, 0)
+        return course_row_to_dict(row, counts)
 
 
 # Enrollment routes
@@ -380,32 +497,31 @@ def course_roster(course_id: str, user=Depends(require_user)):
         raise HTTPException(status_code=403, detail="FACULTY role required")
     try:
         roster_resp = enrollment_stub.ListCourseRoster(enrollment_pb2.ListCourseRosterRequest(course_id=course_id))
-
-        # Fetch course metadata to derive term/academic_year for grade lookup
-        course_resp = course_stub.GetCourse(course_pb2.GetCourseRequest(id=course_id))
-        course = course_resp.course
-        term = getattr(course, "term", "")
-        academic_year = getattr(course, "academic_year", "")
-
-        # Fetch existing grades for this course/term/AY
-        grades_resp = grade_stub.ListCourseGrades(
-            grade_pb2.ListCourseGradesRequest(course_id=course_id, term=term, academic_year=academic_year)
-        )
-        grade_map = {g.student_id: g.grade for g in grades_resp.grades}
-
-        roster = [
-            {
-                "student_id": r.student_id,
-                "student_name": r.student_name,
-                "user_number": r.user_number,
-                "status": r.status,
-                "grade": grade_map.get(r.student_id),
-            }
-            for r in roster_resp.roster
-        ]
-        return {"roster": roster, "term": term, "academic_year": academic_year}
     except grpc.RpcError as exc:
         grpc_unavailable("enrollment", exc)
+
+    grades_available = True
+    grade_map = {}
+    try:
+        # Fetch existing grades for this course (no dependency on course service)
+        grades_resp = grade_stub.ListCourseGrades(grade_pb2.ListCourseGradesRequest(course_id=course_id))
+        grade_map = {g.student_id: g.grade for g in grades_resp.grades}
+    except grpc.RpcError as exc:
+        grades_available = False
+        log_grpc_error("grade", exc)
+
+    roster = [
+        {
+            "student_id": r.student_id,
+            "student_name": r.student_name,
+            "user_number": r.user_number,
+            "status": r.status,
+            "grade": grade_map.get(r.student_id),
+        }
+        for r in roster_resp.roster
+    ]
+    # term/academic_year may be empty when course-service is offline
+    return {"roster": roster, "grades_available": grades_available}
 
 
 # Grade routes
@@ -442,13 +558,17 @@ def submit_grade(body: dict, user=Depends(require_user)):
     """Single-grade submission (legacy); expects UUIDs and academic year."""
     if user.get("role") != "FACULTY":
         raise HTTPException(status_code=403, detail="FACULTY role required")
+    course_id = body.get("course_id", "")
+    course_meta = fetch_course_metadata(course_id)
     try:
         resp = grade_stub.SubmitGrade(
             grade_pb2.SubmitGradeRequest(
                 student_id=body.get("student_id", ""),
-                course_id=body.get("course_id", ""),
-                term=body.get("term", ""),
-                academic_year=body.get("academic_year", ""),
+                course_id=course_id,
+                course_code=course_meta["course_code"],
+                course_name=course_meta["course_name"],
+                term=body.get("term", "") or course_meta["term"],
+                academic_year=body.get("academic_year", "") or course_meta["academic_year"],
                 grade=body.get("grade", ""),
             )
         )
@@ -473,13 +593,16 @@ def submit_grades(body: dict, user=Depends(require_user)):
     if user.get("role") != "FACULTY":
         raise HTTPException(status_code=403, detail="FACULTY role required")
     course_id = body.get("course_id", "")
-    term = body.get("term", "")
-    academic_year = body.get("academic_year", "")
+    course_meta = fetch_course_metadata(course_id)
+    term = body.get("term", "") or course_meta["term"]
+    academic_year = body.get("academic_year", "") or course_meta["academic_year"]
     records = body.get("records", [])
     try:
         resp = grade_stub.SubmitGrades(
             grade_pb2.SubmitGradesRequest(
                 course_id=course_id,
+                course_code=course_meta["course_code"],
+                course_name=course_meta["course_name"],
                 term=term,
                 academic_year=academic_year,
                 records=[
