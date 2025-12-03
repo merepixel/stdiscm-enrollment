@@ -6,6 +6,7 @@ import grpc
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from jose import JWTError, jwt
 from sqlalchemy import create_engine, text
+import httpx
 
 BASE_DIR = Path(__file__).resolve().parent  # /app inside container
 if str(BASE_DIR) not in sys.path:
@@ -33,6 +34,7 @@ except ImportError as exc:  # pragma: no cover - clarity for missing codegen
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@db:5432/enrollment")
 JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret")
 JWT_ALG = os.getenv("JWT_ALG", "HS256")
+AUTH_HTTP_TARGET = os.getenv("AUTH_HTTP_TARGET", "http://auth-service:8001")
 
 AUTH_GRPC_TARGET = os.getenv("AUTH_GRPC_TARGET", "auth-service:50051")
 COURSE_GRPC_TARGET = os.getenv("COURSE_GRPC_TARGET", "course-service:50052")
@@ -50,7 +52,7 @@ grade_stub = grade_pb2_grpc.GradeServiceStub(grpc.insecure_channel(GRADE_GRPC_TA
 
 app = FastAPI(title="API Gateway", version="0.1.0")
 
-BYPASS_PATHS = {"/api/auth/login", "/health", "/health/db", "/api/ping"}
+BYPASS_PATHS = {"/api/auth/login", "/health", "/health/db", "/api/ping", "/api/smoke/courses"}
 
 
 @app.middleware("http")
@@ -104,14 +106,35 @@ def health_db():
 def ping():
     return {"status": "ok", "service": "gateway", "host": os.getenv("HOSTNAME", "gateway")}
 
+@app.get("/api/smoke/courses")
+def smoke_courses():
+    """End-to-end smoke: gateway -> CourseService over gRPC."""
+    try:
+        resp = course_stub.ListCourses(course_pb2.ListCoursesRequest())
+        courses = [
+            {"id": c.id, "code": c.code, "title": c.title, "description": c.description, "capacity": c.capacity}
+            for c in resp.courses
+        ]
+        return {"status": "ok", "via": "grpc", "courses": courses}
+    except grpc.RpcError as exc:
+        raise HTTPException(status_code=503, detail=f"Course service unavailable: {exc.details()}")
+
 
 # Auth routes
 auth_router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 @auth_router.post("/login")
-def login_placeholder():
-    return {"message": "Login is handled by the auth-service via gRPC/REST; placeholder in gateway."}
+async def login_proxy(body: dict):
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post(f"{AUTH_HTTP_TARGET}/login", json=body)
+        except httpx.HTTPError as exc:
+            raise HTTPException(status_code=503, detail=f"Auth service unreachable: {exc}") from exc
+
+    if resp.status_code != 200:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    return resp.json()
 
 
 @auth_router.get("/me")

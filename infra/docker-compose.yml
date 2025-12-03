@@ -46,7 +46,12 @@ services:
     labels:
       - traefik.enable=true
       - traefik.http.routers.gateway.rule=PathPrefix(`/api`)
+      - traefik.http.routers.gateway.priority=10
       - traefik.http.routers.gateway.entrypoints=web
+      - traefik.http.routers.gateway.service=gateway
+      - traefik.http.routers.gateway-health.rule=Path(`/gateway/health`)
+      - traefik.http.routers.gateway-health.entrypoints=web
+      - traefik.http.routers.gateway-health.service=gateway
       - traefik.http.services.gateway.loadbalancer.server.port=8000
     networks:
       - backend_net
@@ -56,7 +61,9 @@ services:
       - "8000:8000"
 
   auth-service:
-    build: ../auth-service
+    build:
+      context: ..                  # repo root as build context
+      dockerfile: auth-service/Dockerfile
     depends_on:
       - db
     environment:
@@ -67,7 +74,9 @@ services:
       - "8001"
 
   course-service:
-    build: ../course-service
+    build:
+      context: ..
+      dockerfile: course-service/Dockerfile
     depends_on:
       - db
     environment:
@@ -76,9 +85,12 @@ services:
       - backend_net
     expose:
       - "8002"
+      - "50052"
 
   enrollment-service:
-    build: ../enrollment-service
+    build:
+      context: ..
+      dockerfile: enrollment-service/Dockerfile
     depends_on:
       - db
       - auth-service
@@ -89,9 +101,12 @@ services:
       - backend_net
     expose:
       - "8003"
+      - "50053"
 
   grade-service:
-    build: ../grade-service
+    build:
+      context: ..
+      dockerfile: grade-service/Dockerfile
     depends_on:
       - db
       - auth-service
@@ -102,6 +117,7 @@ services:
       - backend_net
     expose:
       - "8004"
+      - "50054"
 
   frontend:
     build: ../frontend
@@ -111,3 +127,9 @@ services:
       - "3000:3000"
     networks:
       - backend_net
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.frontend.rule=PathPrefix(`/`)
+      - traefik.http.routers.frontend.entrypoints=web
+      - traefik.http.routers.frontend.priority=1
+      - traefik.http.services.frontend.loadbalancer.server.port=3000

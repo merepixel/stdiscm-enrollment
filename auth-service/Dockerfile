@@ -1,13 +1,13 @@
 FROM python:3.12-slim
 
 WORKDIR /app
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY auth-service/requirements.txt ./auth-service/requirements.txt
+RUN pip install --no-cache-dir -r auth-service/requirements.txt
 
-COPY . .
+COPY auth-service/ ./auth-service
+COPY common/ ./auth-service/common
 
-EXPOSE 8001
+WORKDIR /app/auth-service
+
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]

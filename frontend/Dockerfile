@@ -4,6 +4,8 @@ WORKDIR /app
 
 COPY package.json ./
 COPY vite.config.js ./
+COPY tailwind.config.js ./
+COPY postcss.config.js ./
 COPY index.html ./
 COPY src ./src
 

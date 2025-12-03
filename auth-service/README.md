@@ -1,6 +1,7 @@
 # Auth Service
 
-- **Purpose:** Issue and validate JWTs, handle login/logout, and manage STUDENT/FACULTY roles.
-- **Port:** 50051 (gRPC) / 8001 (REST) (adjust as needed).
-- **Responsibilities:** Authenticate users, sign JWTs, verify tokens/roles for other services, and expose minimal user info over gRPC to callers like Enrollment and Grade.
-- **DS Note:** This node provides authentication and JWT issuance for the distributed system; if it goes down, only auth-dependent flows fail while other nodes stay up.
+- **Purpose:** Issue/validate JWTs, expose login, and provide user/role info to other nodes.
+- **Ports:** REST `8001`, gRPC `50051`.
+- **REST endpoints:** `POST /login`, `GET /health`, `GET /health/db`.
+- **gRPC methods:** `ValidateToken`, `GetUser`.
+- **DS note:** This node encapsulates authentication; if it is down, logins and token validation fail, but other nodes keep serving cached-token flows until auth is required.

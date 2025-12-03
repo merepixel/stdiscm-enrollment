@@ -1,8 +1,55 @@
+import React from 'react';
+import { Navigate, Route, Routes } from 'react-router-dom';
+import NavBar from './components/NavBar';
+import { ProtectedRoute } from './context/AuthContext';
+import CoursesPage from './pages/CoursesPage';
+import FacultyGradesPage from './pages/FacultyGradesPage';
+import LoginPage from './pages/LoginPage';
+import MyEnrollmentsPage from './pages/MyEnrollmentsPage';
+import MyGradesPage from './pages/MyGradesPage';
+
 export default function App() {
   return (
-    <main style={{ fontFamily: 'sans-serif', padding: '2rem' }}>
-      <h1>Distributed Enrollment UI</h1>
-      <p>Frontend talks to the API Gateway via REST. Services are isolated nodes.</p>
-    </main>
+    <div className="min-h-screen bg-gray-50 text-gray-900">
+      <NavBar />
+      <main className="max-w-5xl mx-auto px-4 py-6">
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route
+            path="/courses"
+            element={
+              <ProtectedRoute>
+                <CoursesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/my-enrollments"
+            element={
+              <ProtectedRoute>
+                <MyEnrollmentsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/my-grades"
+            element={
+              <ProtectedRoute>
+                <MyGradesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/faculty/grades"
+            element={
+              <ProtectedRoute requireRole="FACULTY">
+                <FacultyGradesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to="/courses" replace />} />
+        </Routes>
+      </main>
+    </div>
   );
 }
