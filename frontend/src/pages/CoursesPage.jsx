@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { enrollInCourse, getCourses } from '../api/client';
 import Button from '../components/Button';
+import { useAuth } from '../context/AuthContext';
 
 export default function CoursesPage() {
+  const { user, isAuthenticated } = useAuth();
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
@@ -47,11 +49,15 @@ export default function CoursesPage() {
                 <h3 className="text-lg font-semibold text-gray-900">{c.code} — {c.title}</h3>
                 <p className="text-sm text-gray-600">{c.description}</p>
               </div>
-              <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700">Cap {c.capacity}</span>
+              <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700">
+                Cap {Math.max(c.available ?? c.capacity ?? 0, 0)}{c.capacity ? `/${c.capacity}` : ''}
+              </span>
             </div>
-            <Button className="self-start" onClick={() => handleEnroll(c.id)}>
-              Enroll
-            </Button>
+            {isAuthenticated && user?.role === 'STUDENT' && (
+              <Button className="self-start" onClick={() => handleEnroll(c.id)}>
+                Enroll
+              </Button>
+            )}
           </article>
         ))}
         {courses.length === 0 && <p className="text-gray-600">No courses available.</p>}

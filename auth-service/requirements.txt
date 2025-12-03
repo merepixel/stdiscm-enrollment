@@ -8,3 +8,4 @@ grpcio
 grpcio-tools
 httpx
 passlib[bcrypt]
+bcrypt==4.2.0

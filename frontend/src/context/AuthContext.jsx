@@ -24,7 +24,12 @@ export function AuthProvider({ children }) {
     const data = await apiLogin(email, password);
     setToken(data.access_token);
     setAuthToken(data.access_token);
-    setUser({ email, role: data.role, user_id: data.user_id });
+    setUser({
+      email,
+      role: data.role,
+      id: data.id ?? data.user_number ?? data.user_id,
+      user_uuid: data.user_id,
+    });
     navigate('/courses');
   };
 
@@ -57,15 +62,20 @@ export function useAuth() {
   return ctx;
 }
 
-export function ProtectedRoute({ children, requireRole }) {
+export function ProtectedRoute({ children, requireRole, allowRoles }) {
   const { isAuthenticated, user } = useAuth();
+  const role = user?.role;
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
-  if (requireRole && user?.role !== requireRole) {
-    return <p style={{ padding: '1rem' }}>Access denied: {requireRole} role required.</p>;
+  if (requireRole && role !== requireRole) {
+    return <Navigate to="/courses" replace />;
+  }
+
+  if (Array.isArray(allowRoles) && !allowRoles.includes(role)) {
+    return <Navigate to="/courses" replace />;
   }
 
   return children;

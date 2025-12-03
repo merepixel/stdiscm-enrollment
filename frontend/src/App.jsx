@@ -14,19 +14,13 @@ export default function App() {
       <NavBar />
       <main className="max-w-5xl mx-auto px-4 py-6">
         <Routes>
+          <Route path="/" element={<CoursesPage />} />
+          <Route path="/courses" element={<CoursesPage />} />
           <Route path="/login" element={<LoginPage />} />
-          <Route
-            path="/courses"
-            element={
-              <ProtectedRoute>
-                <CoursesPage />
-              </ProtectedRoute>
-            }
-          />
           <Route
             path="/my-enrollments"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute allowRoles={['STUDENT']}>
                 <MyEnrollmentsPage />
               </ProtectedRoute>
             }
@@ -34,7 +28,7 @@ export default function App() {
           <Route
             path="/my-grades"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute allowRoles={['STUDENT']}>
                 <MyGradesPage />
               </ProtectedRoute>
             }

@@ -1,12 +1,15 @@
+import logging
 import os
 import sys
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Optional
 import concurrent.futures as futures
 
 import grpc
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
@@ -29,16 +32,50 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@db:5432
 JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret")
 JWT_ALG = os.getenv("JWT_ALG", "HS256")
 JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "60"))
+GRPC_PORT = int(os.getenv("AUTH_GRPC_PORT", "50051"))
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 app = FastAPI(title="Auth Service", version="0.1.0")
 
+SERVICE_NAME = "auth-service"
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s %(message)s",
+)
+logger = logging.getLogger(SERVICE_NAME)
+
 
 class LoginRequest(BaseModel):
     email: str
     password: str
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except HTTPException as exc:
+        duration_ms = (time.perf_counter() - start) * 1000
+        log_fn = logger.error if exc.status_code >= 500 else logger.warning
+        log_fn(
+            "%s %s -> %s (%.2f ms) detail=%s",
+            request.method,
+            request.url.path,
+            exc.status_code,
+            duration_ms,
+            exc.detail,
+        )
+        raise
+    except Exception:
+        duration_ms = (time.perf_counter() - start) * 1000
+        logger.exception("%s %s -> unhandled error (%.2f ms)", request.method, request.url.path, duration_ms)
+        raise
+    duration_ms = (time.perf_counter() - start) * 1000
+    logger.info("%s %s -> %s (%.2f ms)", request.method, request.url.path, response.status_code, duration_ms)
+    return response
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -49,9 +86,15 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         return plain_password == hashed_password
 
 
-def create_access_token(user_id: str, email: str, role: str) -> str:
+def create_access_token(user_id: str, email: str, role: str, user_number: Optional[str] = None) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=JWT_EXPIRE_MINUTES)
-    to_encode = {"sub": user_id, "email": email, "role": role, "exp": expire}
+    to_encode = {
+        "sub": user_id,
+        "email": email,
+        "role": role,
+        "user_number": user_number,
+        "exp": expire,
+    }
     return jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALG)
 
 
@@ -61,21 +104,24 @@ def login(body: LoginRequest):
         with engine.connect() as conn:
             row = conn.execute(
                 text(
-                    "SELECT id, email, password_hash, role FROM auth.users WHERE email = :email"
+                    "SELECT id, user_number, email, password_hash, role FROM auth.users WHERE email = :email"
                 ),
                 {"email": body.email},
             ).mappings().first()
     except SQLAlchemyError as exc:
+        logger.error("DB error during login: %s", exc)
         raise HTTPException(status_code=500, detail=f"DB error: {exc}") from exc
 
     if not row or not verify_password(body.password, row["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    token = create_access_token(str(row["id"]), row["email"], row["role"])
+    user_number = row.get("user_number") or str(row["id"])
+    token = create_access_token(str(row["id"]), row["email"], row["role"], user_number)
     return {
         "access_token": token,
         "token_type": "bearer",
         "role": row["role"],
+        "id": user_number,
         "user_id": str(row["id"]),
     }
 
@@ -151,7 +197,7 @@ def serve_grpc():
     #server = grpc.server(thread_pool=threading.ThreadPoolExecutor(max_workers=10))
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     auth_pb2_grpc.add_AuthServiceServicer_to_server(AuthService(), server)
-    server.add_insecure_port("[::]:50051")
+    server.add_insecure_port(f"[::]:{GRPC_PORT}")
     server.start()
     server.wait_for_termination()
 

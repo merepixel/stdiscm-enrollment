@@ -10,6 +10,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- Auth service owned table.
 CREATE TABLE IF NOT EXISTS auth.users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_number VARCHAR(32),
     name TEXT NOT NULL,
     email TEXT NOT NULL UNIQUE,
     role TEXT NOT NULL CHECK (role IN ('STUDENT', 'FACULTY')),
@@ -17,7 +18,9 @@ CREATE TABLE IF NOT EXISTS auth.users (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS user_number VARCHAR(32);
 CREATE INDEX IF NOT EXISTS idx_auth_users_role ON auth.users (role);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_users_number ON auth.users (user_number);
 
 -- Course catalog service owned table.
 CREATE TABLE IF NOT EXISTS course_catalog.courses (
@@ -58,18 +61,18 @@ CREATE INDEX IF NOT EXISTS idx_grades_student ON grade.grades (student_id);
 CREATE INDEX IF NOT EXISTS idx_grades_course ON grade.grades (course_id);
 
 -- Seed demo users (plain text passwords allowed by auth-service fallback).
-INSERT INTO auth.users (id, name, email, role, password_hash)
+INSERT INTO auth.users (id, user_number, name, email, role, password_hash)
 VALUES
-  ('00000000-0000-0000-0000-000000000001', 'Alice Student', 'student@example.com', 'STUDENT', '$2a$12$kNmcB65gfYYRh.LDuexvi.jdmz32tKPeA9G2YOzWh7i0typJprnRm'),
-  ('00000000-0000-0000-0000-000000000002', 'Bob Faculty', 'faculty@example.com', 'FACULTY', '$2a$12$kNmcB65gfYYRh.LDuexvi.jdmz32tKPeA9G2YOzWh7i0typJprnRm')
-ON CONFLICT (email) DO NOTHING;
+  ('00000000-0000-0000-0000-000000000001', '12110007', 'Alice Student', 'student@example.com', 'STUDENT', '$2b$12$Vjl0bSjCP5OMqJl9nOYHH.d8ZyjuqsCuCFgUSYicL8GnAAih2QqOG'),
+  ('00000000-0000-0000-0000-000000000002', '10212345', 'Bob Faculty', 'faculty@example.com', 'FACULTY', '$2b$12$Vjl0bSjCP5OMqJl9nOYHH.d8ZyjuqsCuCFgUSYicL8GnAAih2QqOG')
+ON CONFLICT (email) DO UPDATE SET user_number = EXCLUDED.user_number;
 
 -- Test users for manual login (bcrypt hash for password123)
-INSERT INTO auth.users (id, name, email, role, password_hash)
+INSERT INTO auth.users (id, user_number, name, email, role, password_hash)
 VALUES
-  ('00000000-0000-0000-0000-000000000101', 'Test Student', 'test.student@example.com', 'STUDENT', '$2a$12$kNmcB65gfYYRh.LDuexvi.jdmz32tKPeA9G2YOzWh7i0typJprnRm'),
-  ('00000000-0000-0000-0000-000000000102', 'Test Faculty', 'test.faculty@example.com', 'FACULTY', '$2a$12$kNmcB65gfYYRh.LDuexvi.jdmz32tKPeA9G2YOzWh7i0typJprnRm')
-ON CONFLICT (email) DO NOTHING;
+  ('00000000-0000-0000-0000-000000000101', '90000001', 'Test Student', 'test.student@example.com', 'STUDENT', '$2b$12$Vjl0bSjCP5OMqJl9nOYHH.d8ZyjuqsCuCFgUSYicL8GnAAih2QqOG'),
+  ('00000000-0000-0000-0000-000000000102', '90000002', 'Test Faculty', 'test.faculty@example.com', 'FACULTY', '$2b$12$Vjl0bSjCP5OMqJl9nOYHH.d8ZyjuqsCuCFgUSYicL8GnAAih2QqOG')
+ON CONFLICT (email) DO UPDATE SET user_number = EXCLUDED.user_number;
 
 -- Seed demo courses.
 INSERT INTO course_catalog.courses (id, code, title, description, capacity)

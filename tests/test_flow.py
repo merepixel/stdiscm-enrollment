@@ -6,7 +6,7 @@ from typing import Optional
 from uuid import uuid4
 
 
-BASE_URL = os.getenv("BASE_URL", "http://localhost")
+BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
 
 
 def _request(method: str, path: str, body: Optional[dict] = None, token: Optional[str] = None):

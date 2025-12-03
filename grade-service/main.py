@@ -1,13 +1,15 @@
 import concurrent.futures as futures
+import logging
 import os
 import sys
 import threading
+import time
 from pathlib import Path
 from typing import List
 from uuid import uuid4
 
 import grpc
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import Column, String, Text, create_engine, text
 from sqlalchemy.dialects.postgresql import UUID
@@ -28,6 +30,7 @@ except ImportError as exc:  # pragma: no cover
     raise ImportError("Protos not generated or not on PYTHONPATH. Run `make protos`.") from exc
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@db:5432/enrollment")
+GRPC_PORT = int(os.getenv("GRADE_GRPC_PORT", "50054"))
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,
@@ -49,6 +52,12 @@ class Grade(Base):
 
 
 app = FastAPI(title="Grade Service", version="0.1.0")
+SERVICE_NAME = "grade-service"
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s %(message)s",
+)
+logger = logging.getLogger(SERVICE_NAME)
 
 
 class GradeIn(BaseModel):
@@ -56,6 +65,32 @@ class GradeIn(BaseModel):
     course_id: str
     term: str
     grade: str
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except HTTPException as exc:
+        duration_ms = (time.perf_counter() - start) * 1000
+        log_fn = logger.error if exc.status_code >= 500 else logger.warning
+        log_fn(
+            "%s %s -> %s (%.2f ms) detail=%s",
+            request.method,
+            request.url.path,
+            exc.status_code,
+            duration_ms,
+            exc.detail,
+        )
+        raise
+    except Exception:
+        duration_ms = (time.perf_counter() - start) * 1000
+        logger.exception("%s %s -> unhandled error (%.2f ms)", request.method, request.url.path, duration_ms)
+        raise
+    duration_ms = (time.perf_counter() - start) * 1000
+    logger.info("%s %s -> %s (%.2f ms)", request.method, request.url.path, response.status_code, duration_ms)
+    return response
 
 
 def get_db():
@@ -174,7 +209,7 @@ class GradeService(grade_pb2_grpc.GradeServiceServicer):
 def serve_grpc():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     grade_pb2_grpc.add_GradeServiceServicer_to_server(GradeService(), server)
-    server.add_insecure_port("[::]:50054")
+    server.add_insecure_port(f"[::]:{GRPC_PORT}")
     server.start()
     server.wait_for_termination()
 

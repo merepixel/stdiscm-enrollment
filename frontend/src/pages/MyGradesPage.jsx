@@ -18,37 +18,43 @@ export default function MyGradesPage() {
   }, []);
 
   if (loading) {
-    return <p style={{ padding: '1rem' }}>Loading grades...</p>;
+    return <p className="p-4 text-gray-600">Loading grades...</p>;
   }
 
   return (
-    <section style={{ padding: '1rem' }}>
-      <h1>My Grades</h1>
-      <p>// uses GET /api/grades/my</p>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      <table>
-        <thead>
-          <tr>
-            <th>Course</th>
-            <th>Term</th>
-            <th>Grade</th>
-          </tr>
-        </thead>
-        <tbody>
-          {grades.map((g) => (
-            <tr key={g.id}>
-              <td>{g.course_id}</td>
-              <td>{g.term}</td>
-              <td>{g.grade}</td>
-            </tr>
-          ))}
-          {grades.length === 0 && (
-            <tr>
-              <td colSpan={3}>No grades yet.</td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+    <section className="space-y-3">
+      <div>
+        <h1 className="text-2xl font-semibold text-gray-900">My Grades</h1>
+        <p className="text-sm text-gray-600">// uses GET /api/grades/my</p>
+      </div>
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200 text-sm">
+            <thead className="bg-gray-50 text-left">
+              <tr>
+                <th className="px-4 py-2 font-semibold text-gray-700">Course</th>
+                <th className="px-4 py-2 font-semibold text-gray-700">Term</th>
+                <th className="px-4 py-2 font-semibold text-gray-700">Grade</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {grades.map((g) => (
+                <tr key={g.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-2 text-gray-900">{g.course_id}</td>
+                  <td className="px-4 py-2 text-gray-700">{g.term}</td>
+                  <td className="px-4 py-2 text-gray-900 font-semibold">{g.grade}</td>
+                </tr>
+              ))}
+              {grades.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="px-4 py-3 text-gray-600">No grades yet.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </section>
   );
 }

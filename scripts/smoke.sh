@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BASE_URL="${BASE_URL:-http://localhost}"
+BASE_URL="${BASE_URL:-http://localhost:8000}"
 
 echo "Waiting for gateway at ${BASE_URL}..."
 for i in {1..30}; do
