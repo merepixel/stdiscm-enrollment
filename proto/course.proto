@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package course;
+
+option java_multiple_files = true;
+option java_package = "com.stdiscm.course";
+
+message Course {
+  string id = 1;
+  string code = 2;
+  string title = 3;
+  string description = 4;
+  int32 capacity = 5;
+}
+
+message ListCoursesRequest {}
+
+message ListCoursesResponse {
+  repeated Course courses = 1;
+}
+
+message GetCourseRequest {
+  oneof lookup {
+    string id = 1;
+    string code = 2;
+  }
+}
+
+message GetCourseResponse {
+  Course course = 1;
+}
+
+service CourseService {
+  rpc ListCourses (ListCoursesRequest) returns (ListCoursesResponse);
+  rpc GetCourse (GetCourseRequest) returns (GetCourseResponse);
+}

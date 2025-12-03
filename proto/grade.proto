@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package grade;
+
+option java_multiple_files = true;
+option java_package = "com.stdiscm.grade";
+
+message GradeRecord {
+  string id = 1;
+  string student_id = 2;
+  string course_id = 3;
+  string term = 4;
+  string grade = 5;
+}
+
+message SubmitGradeRequest {
+  string student_id = 1;
+  string course_id = 2;
+  string term = 3;
+  string grade = 4;
+}
+
+message SubmitGradeResponse {
+  GradeRecord record = 1;
+}
+
+message ListGradesRequest {
+  string student_id = 1;
+}
+
+message ListGradesResponse {
+  repeated GradeRecord grades = 1;
+}
+
+service GradeService {
+  rpc SubmitGrade (SubmitGradeRequest) returns (SubmitGradeResponse);
+  rpc ListGrades (ListGradesRequest) returns (ListGradesResponse);
+}

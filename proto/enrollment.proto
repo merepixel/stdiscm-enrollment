@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package enrollment;
+
+option java_multiple_files = true;
+option java_package = "com.stdiscm.enrollment";
+
+enum EnrollmentStatus {
+  ENROLLMENT_STATUS_UNSPECIFIED = 0;
+  ENROLLED = 1;
+  WAITLISTED = 2;
+  DROPPED = 3;
+}
+
+message Enrollment {
+  string id = 1;
+  string student_id = 2;
+  string course_id = 3;
+  EnrollmentStatus status = 4;
+}
+
+message EnrollRequest {
+  string student_id = 1;
+  string course_id = 2;
+}
+
+message EnrollResponse {
+  Enrollment enrollment = 1;
+}
+
+message ListStudentEnrollmentsRequest {
+  string student_id = 1;
+}
+
+message ListStudentEnrollmentsResponse {
+  repeated Enrollment enrollments = 1;
+}
+
+message DropEnrollmentRequest {
+  string enrollment_id = 1;
+}
+
+message DropEnrollmentResponse {
+  Enrollment enrollment = 1;
+}
+
+service EnrollmentService {
+  rpc Enroll (EnrollRequest) returns (EnrollResponse);
+  rpc ListStudentEnrollments (ListStudentEnrollmentsRequest) returns (ListStudentEnrollmentsResponse);
+  rpc DropEnrollment (DropEnrollmentRequest) returns (DropEnrollmentResponse);
+}
