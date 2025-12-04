@@ -317,6 +317,24 @@ def enroll(body: EnrollRequestBody, db: Session = Depends(get_db)):
     if existing_same_course:
         raise HTTPException(status_code=409, detail="Already enrolled in another section of this course")
 
+    existing_same_section = (
+        db.query(Enrollment)
+        .filter(Enrollment.student_id == body.student_id, Enrollment.course_id == body.course_id)
+        .first()
+    )
+    if existing_same_section:
+        if existing_same_section.status != EnrollmentStatus.DROPPED.value:
+            raise HTTPException(status_code=409, detail="Already enrolled in this course section")
+        existing_same_section.status = status
+        db.commit()
+        db.refresh(existing_same_section)
+        return {
+            "id": str(existing_same_section.id),
+            "student_id": str(existing_same_section.student_id),
+            "course_id": str(existing_same_section.course_id),
+            "status": existing_same_section.status,
+        }
+
     current = (
         db.query(func.count())
         .select_from(Enrollment)
@@ -428,6 +446,32 @@ class EnrollmentService(enrollment_pb2_grpc.EnrollmentServiceServicer):
                 context.set_code(grpc.StatusCode.ALREADY_EXISTS)
                 context.set_details("Already enrolled in another section of this course")
                 return enrollment_pb2.EnrollResponse()
+
+            existing_same_section = (
+                db.query(Enrollment)
+                .filter(Enrollment.student_id == request.student_id, Enrollment.course_id == request.course_id)
+                .first()
+            )
+            if existing_same_section:
+                if existing_same_section.status != EnrollmentStatus.DROPPED.value:
+                    context.set_code(grpc.StatusCode.ALREADY_EXISTS)
+                    context.set_details("Already enrolled in this course section")
+                    return enrollment_pb2.EnrollResponse()
+                # Reuse the dropped record to allow re-enrollment in the same section.
+                existing_same_section.status = status
+                db.commit()
+                db.refresh(existing_same_section)
+                proto_status = self._status_to_proto(existing_same_section.status)
+                return enrollment_pb2.EnrollResponse(
+                    enrollment=enrollment_pb2.Enrollment(
+                        id=str(existing_same_section.id),
+                        student_id=str(existing_same_section.student_id),
+                        course_id=str(existing_same_section.course_id),
+                        status=proto_status,
+                        term=course.term or "",
+                        academic_year=course.academic_year or "",
+                    )
+                )
 
             ensure_student(db, student_id=request.student_id)
             enr = Enrollment(student_id=request.student_id, course_id=request.course_id, status=status)

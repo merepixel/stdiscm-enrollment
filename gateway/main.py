@@ -461,6 +461,44 @@ def enroll(body: dict, user=Depends(require_user)):
         grpc_unavailable("enrollment", exc)
 
 
+@enrollment_router.delete("/{enrollment_id}")
+def drop(enrollment_id: str, user=Depends(require_user)):
+    if user.get("role") == "FACULTY":
+        raise HTTPException(status_code=403, detail="Faculty cannot drop enrollments")
+    try:
+        resp = enrollment_stub.ListStudentEnrollments(
+            enrollment_pb2.ListStudentEnrollmentsRequest(student_id=user["user_id"])
+        )
+    except grpc.RpcError as exc:
+        grpc_unavailable("enrollment", exc)
+
+    target = next((e for e in resp.enrollments if e.id == enrollment_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="Enrollment not found")
+
+    try:
+        drop_resp = enrollment_stub.DropEnrollment(
+            enrollment_pb2.DropEnrollmentRequest(enrollment_id=enrollment_id)
+        )
+    except grpc.RpcError as exc:
+        grpc_unavailable("enrollment", exc)
+
+    enr = drop_resp.enrollment
+    if not enr:
+        raise HTTPException(status_code=404, detail="Enrollment not found")
+
+    return {
+        "enrollment": {
+            "id": enr.id,
+            "student_id": enr.student_id,
+            "course_id": enr.course_id,
+            "status": enr.status,
+            "term": getattr(enr, "term", ""),
+            "academic_year": getattr(enr, "academic_year", ""),
+        }
+    }
+
+
 @enrollment_router.get("/my")
 def list_my_enrollments(user=Depends(require_user)):
     try:
@@ -471,6 +509,8 @@ def list_my_enrollments(user=Depends(require_user)):
         for e in resp.enrollments:
             term = getattr(e, "term", "")
             ay = getattr(e, "academic_year", "")
+            if e.status == enrollment_pb2.DROPPED:
+                continue
             if CURRENT_TERM and term != CURRENT_TERM:
                 continue
             if CURRENT_ACADEMIC_YEAR and ay != CURRENT_ACADEMIC_YEAR:

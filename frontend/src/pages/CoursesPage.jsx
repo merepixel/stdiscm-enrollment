@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { enrollInCourse, getCourses } from '../api/client';
 import Button from '../components/Button';
 import { useAuth } from '../context/AuthContext';
@@ -8,25 +8,47 @@ export default function CoursesPage() {
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [enrollingId, setEnrollingId] = useState('');
+  const mountedRef = useRef(true);
+
+  const loadCourses = useCallback(
+    async (showLoading = false) => {
+      if (showLoading) setLoading(true);
+      try {
+        const data = await getCourses(); // GET /api/courses
+        if (!mountedRef.current) return;
+        setCourses(data.courses || []);
+      } catch (err) {
+        if (!mountedRef.current) return;
+        setMessage(err?.response?.data?.detail || 'Failed to load courses');
+      } finally {
+        if (showLoading && mountedRef.current) setLoading(false);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
-    let mounted = true;
-    getCourses() // GET /api/courses
-      .then((data) => mounted && setCourses(data.courses || []))
-      .catch((err) => setMessage(err?.response?.data?.detail || 'Failed to load courses'))
-      .finally(() => setLoading(false));
+    mountedRef.current = true;
+    loadCourses(true);
+    const id = setInterval(() => loadCourses(false), 15000);
     return () => {
-      mounted = false;
+      mountedRef.current = false;
+      clearInterval(id);
     };
-  }, []);
+  }, [loadCourses]);
 
   const handleEnroll = async (courseId) => {
     setMessage('');
+    setEnrollingId(courseId);
     try {
       await enrollInCourse(courseId); // POST /api/enrollments/
-      setMessage('Enrollment request sent');
+      await loadCourses(false);
+      setMessage('Enrollment request sent; availability refreshed.');
     } catch (err) {
       setMessage(err?.response?.data?.detail || 'Enrollment failed');
+    } finally {
+      setEnrollingId('');
     }
   };
 
@@ -48,14 +70,19 @@ export default function CoursesPage() {
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">{c.code} — {c.title}</h3>
                 <p className="text-sm text-gray-600">{c.description}</p>
+                <p className="text-xs text-gray-500 mt-1">Section: {c.section || 'N/A'} | Term: {c.term || '—'} | AY: {c.academic_year || '—'}</p>
               </div>
               <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700">
                 Cap {Math.max(c.available ?? c.capacity ?? 0, 0)}{c.capacity ? `/${c.capacity}` : ''}
               </span>
             </div>
             {isAuthenticated && user?.role === 'STUDENT' && (
-              <Button className="self-start" onClick={() => handleEnroll(c.id)}>
-                Enroll
+              <Button
+                className="self-start"
+                onClick={() => handleEnroll(c.id)}
+                disabled={enrollingId === c.id}
+              >
+                {enrollingId === c.id ? 'Enrolling...' : 'Enroll'}
               </Button>
             )}
           </article>

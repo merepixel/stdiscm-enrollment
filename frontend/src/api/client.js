@@ -50,6 +50,11 @@ export async function enrollInCourse(courseId) {
   return resp.data;
 }
 
+export async function dropEnrollment(enrollmentId) {
+  const resp = await api.delete(`/enrollments/${enrollmentId}`);
+  return resp.data;
+}
+
 export async function getMyEnrollments() {
   // Gateway exposes /api/enrollments/my
   const resp = await api.get('/enrollments/my');
