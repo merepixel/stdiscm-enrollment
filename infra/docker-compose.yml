@@ -3,7 +3,8 @@ networks:
     driver: bridge
 
 volumes:
-  pgdata:
+  pgdata-primary:
+  pgdata-replica:
 
 services:
   traefik:
@@ -21,20 +22,52 @@ services:
     networks:
       - ds-net
 
-  db:
-    container_name: db
+  # --- DATABASE CLUSTER (primary + replica + proxy) ---
+
+  db-primary:
+    container_name: db-primary
     image: postgres:16
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: enrollment
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata-primary:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
       - ds-net
+    # no host port; db-cluster will expose 5432
+
+  db-replica:
+    container_name: db-replica
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: enrollment
+    volumes:
+      - pgdata-replica:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - ds-net
+    depends_on:
+      - db-primary
+    # also no host port; db-cluster will expose 5432
+
+  db-cluster:
+    container_name: db-cluster
+    image: haproxy:2.9
+    depends_on:
+      - db-primary
+      - db-replica
+    networks:
+      - ds-net
     ports:
-      - "5432:5432"
+      - "5432:5432"  # stable DB endpoint for host + services
+    volumes:
+      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+
+  # --- APPLICATION SERVICES ---
 
   gateway:
     container_name: gateway
@@ -42,22 +75,21 @@ services:
       context: ..
       dockerfile: gateway/Dockerfile
     depends_on:
-      - db
+      - db-cluster
       - auth-service
       - course-service
       - enrollment-service
       - grade-service
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/enrollment
+      DATABASE_URL: postgresql://postgres:postgres@db-cluster:5432/enrollment
       AUTH_HTTP_TARGET: http://auth-service:8001
       AUTH_GRPC_TARGET: auth-service:50051
       COURSE_GRPC_TARGET: course-service:50052
       ENROLLMENT_GRPC_TARGET: enrollment-service:50053
       GRADE_GRPC_TARGET: grade-service:50054
       CORS_ALLOW_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
-      CURRENT_TERM: "2"          
+      CURRENT_TERM: "2"
       CURRENT_ACADEMIC_YEAR: "2025-2026"
-
     labels:
       - traefik.enable=true
       - traefik.http.routers.gateway.rule=PathPrefix(`/api`)
@@ -83,13 +115,13 @@ services:
       context: ..
       dockerfile: gateway/Dockerfile
     depends_on:
-      - db
+      - db-cluster
       - auth-service
       - course-service
       - enrollment-service
       - grade-service
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/enrollment
+      DATABASE_URL: postgresql://postgres:postgres@db-cluster:5432/enrollment
       AUTH_HTTP_TARGET: http://auth-service:8001
       AUTH_GRPC_TARGET: auth-service:50051
       COURSE_GRPC_TARGET: course-service:50052
@@ -108,12 +140,12 @@ services:
 
   auth-service:
     build:
-      context: ..                  # repo root as build context
+      context: ..
       dockerfile: auth-service/Dockerfile
     depends_on:
-      - db
+      - db-cluster
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/enrollment
+      DATABASE_URL: postgresql://postgres:postgres@db-cluster:5432/enrollment
     networks:
       - ds-net
     ports:
@@ -135,9 +167,9 @@ services:
       context: ..
       dockerfile: course-service/Dockerfile
     depends_on:
-      - db
+      - db-cluster
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/enrollment
+      DATABASE_URL: postgresql://postgres:postgres@db-cluster:5432/enrollment
     networks:
       - ds-net
     expose:
@@ -164,11 +196,11 @@ services:
       context: ..
       dockerfile: enrollment-service/Dockerfile
     depends_on:
-      - db
+      - db-cluster
       - auth-service
       - course-service
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/enrollment
+      DATABASE_URL: postgresql://postgres:postgres@db-cluster:5432/enrollment
     networks:
       - ds-net
     ports:
@@ -190,11 +222,11 @@ services:
       context: ..
       dockerfile: grade-service/Dockerfile
     depends_on:
-      - db
+      - db-cluster
       - auth-service
       - course-service
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/enrollment
+      DATABASE_URL: postgresql://postgres:postgres@db-cluster:5432/enrollment
     networks:
       - ds-net
     ports:

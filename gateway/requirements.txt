@@ -7,3 +7,4 @@ python-jose
 grpcio
 grpcio-tools
 httpx
+pytest
