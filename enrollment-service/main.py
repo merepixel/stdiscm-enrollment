@@ -382,11 +382,11 @@ def list_enrollments(student_id: str, db: Session = Depends(get_db)):
 
 @app.get("/enrollments/roster")
 def course_roster(course_id: str, db: Session = Depends(get_db)):
-    """Roster for a course_id (ENROLLED only) including student name and number."""
+    """Roster for a course_id including student name and number."""
     rows = (
         db.query(Enrollment, Student)
         .join(Student, Student.id == Enrollment.student_id)
-        .filter(Enrollment.course_id == course_id, Enrollment.status == EnrollmentStatus.ENROLLED.value)
+        .filter(Enrollment.course_id == course_id)
         .all()
     )
     return [
@@ -527,7 +527,7 @@ class EnrollmentService(enrollment_pb2_grpc.EnrollmentServiceServicer):
             rows = (
                 db.query(Enrollment, Student)
                 .join(Student, Student.id == Enrollment.student_id)
-                .filter(Enrollment.course_id == request.course_id, Enrollment.status == EnrollmentStatus.ENROLLED.value)
+                .filter(Enrollment.course_id == request.course_id)
                 .all()
             )
             roster_items = [

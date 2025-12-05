@@ -20,6 +20,7 @@ All services attach to the user-defined bridge `ds-net`; inside Docker they talk
 ## Run the stack
 
 ```
+make protos
 cd infra
 docker compose up --build
 ```

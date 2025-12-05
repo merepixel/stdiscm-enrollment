@@ -32,9 +32,17 @@ export default function CoursesPage() {
     mountedRef.current = true;
     loadCourses(true);
     const id = setInterval(() => loadCourses(false), 15000);
+    const onFocus = () => loadCourses(false);
+    const onVisibility = () => {
+      if (!document.hidden) loadCourses(false);
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
     return () => {
       mountedRef.current = false;
       clearInterval(id);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [loadCourses]);
 

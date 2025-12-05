@@ -138,7 +138,7 @@ SELECT id, name, user_number
 FROM auth.users u
 WHERE NOT EXISTS (SELECT 1 FROM enrollment.students es WHERE es.id = u.id);
 
--- Seed past grade.
+-- Seed past grade and enrollment
 
 INSERT INTO grade.grades (student_id, course_id, course_code, course_name, term, academic_year, grade)
 VALUES (
@@ -149,4 +149,12 @@ VALUES (
     '1',                                    
     '2025-2026',                            
     '4.0'                                  
+);
+
+INSERT INTO enrollment.enrollments (id, student_id, course_id, status)
+VALUES (
+  uuid_generate_v4(),
+  '00000000-0000-0000-0000-000000000001', 
+  '10000000-0000-0000-0000-000000000001',
+  'ENROLLED'
 );

@@ -535,10 +535,31 @@ def course_roster(course_id: str, user=Depends(require_user)):
     """Return enrolled students (UUID + number + name) for a course; faculty only."""
     if user.get("role") != "FACULTY":
         raise HTTPException(status_code=403, detail="FACULTY role required")
+    roster_resp = None
+    roster_rows = []
     try:
         roster_resp = enrollment_stub.ListCourseRoster(enrollment_pb2.ListCourseRosterRequest(course_id=course_id))
     except grpc.RpcError as exc:
-        grpc_unavailable("enrollment", exc)
+        log_grpc_error("enrollment", exc)
+        # Fallback: pull roster directly from DB if enrollment-service is unavailable.
+        try:
+            with engine.connect() as conn:
+                roster_rows = list(
+                    conn.execute(
+                        text(
+                            """
+                            SELECT e.student_id, COALESCE(s.name, '') AS student_name, COALESCE(s.user_number, '') AS user_number, e.status
+                            FROM enrollment.enrollments e
+                            LEFT JOIN enrollment.students s ON s.id = e.student_id
+                            WHERE e.course_id = :course_id
+                            """
+                        ),
+                        {"course_id": course_id},
+                    ).mappings()
+                )
+        except Exception as db_exc:
+            logger.error("Roster DB fallback failed: %s", db_exc)
+            raise HTTPException(status_code=503, detail="Roster temporarily unavailable") from db_exc
 
     grades_available = True
     grade_map = {}
@@ -550,16 +571,28 @@ def course_roster(course_id: str, user=Depends(require_user)):
         grades_available = False
         log_grpc_error("grade", exc)
 
-    roster = [
-        {
-            "student_id": r.student_id,
-            "student_name": r.student_name,
-            "user_number": r.user_number,
-            "status": r.status,
-            "grade": grade_map.get(r.student_id),
-        }
-        for r in roster_resp.roster
-    ]
+    if roster_resp:
+        roster = [
+            {
+                "student_id": r.student_id,
+                "student_name": r.student_name,
+                "user_number": r.user_number,
+                "status": r.status,
+                "grade": grade_map.get(r.student_id),
+            }
+            for r in roster_resp.roster
+        ]
+    else:
+        roster = [
+            {
+                "student_id": str(r["student_id"]),
+                "student_name": r["student_name"],
+                "user_number": r["user_number"],
+                "status": r["status"],
+                "grade": grade_map.get(str(r["student_id"])),
+            }
+            for r in roster_rows
+        ]
     # term/academic_year may be empty when course-service is offline
     return {"roster": roster, "grades_available": grades_available}
 
